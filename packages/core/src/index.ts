@@ -9,3 +9,11 @@ export type { ResolvedImport } from './scanner/PathResolver';
 
 export { buildGraph } from './scanner/GraphBuilder';
 export type { GraphNode, DependencyGraph } from './scanner/GraphBuilder';
+
+export { detectCycles } from './scanner/CycleDetector';
+
+export { analyzeImpact } from './scanner/ImpactAnalyzer';
+export type { ImpactResult } from './scanner/ImpactAnalyzer';
+
+export { calculateMetrics } from './scanner/MetricsCalculator';
+export type { FileMetrics, MetricsResult } from './scanner/MetricsCalculator';
