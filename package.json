@@ -1,0 +1,14 @@
+{
+  "name": "code-dep-analyzer",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter @dep-analyzer/api dev",
+    "dev:web": "pnpm --filter @dep-analyzer/web dev",
+    "build": "pnpm --filter @dep-analyzer/core build && pnpm --filter @dep-analyzer/api build",
+    "test": "pnpm --filter @dep-analyzer/core test"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
