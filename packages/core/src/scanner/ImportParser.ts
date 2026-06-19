@@ -3,11 +3,12 @@ import { extname } from 'path';
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
 
+// @babel/traverse в CommonJS-окружении экспортирует функцию через .default
 const traverse = typeof _traverse === 'function' ? _traverse : (_traverse as any).default;
 
 export interface ParsedImport {
-  source: string;
-  isDynamic: boolean;
+  source: string;      // './components/Button', 'react', '@/utils' и т.д.
+  isDynamic: boolean;  // true для import('./heavy-chunk')
 }
 
 export interface ParseResult {
@@ -30,6 +31,7 @@ function getBabelPlugins(filePath: string) {
   return plugins;
 }
 
+// Парсит из строки — удобно для тестов и кэширования
 export function parseImportsFromContent(
   content: string,
   filePath: string
@@ -37,26 +39,32 @@ export function parseImportsFromContent(
   const ast = parse(content, {
     sourceType: 'module',
     plugins: getBabelPlugins(filePath),
-    errorRecovery: true,
+    errorRecovery: true, // не падаем на синтаксических ошибках в чужом коде
   });
 
   const imports: ParsedImport[] = [];
 
   traverse(ast, {
+    // import x from './module'
+    // import { x } from './module'
+    // import './styles'
     ImportDeclaration({ node }: any) {
       imports.push({ source: node.source.value, isDynamic: false });
     },
 
+    // export { x } from './module'
     ExportNamedDeclaration({ node }: any) {
       if (node.source) {
         imports.push({ source: node.source.value, isDynamic: false });
       }
     },
 
+    // export * from './module'
     ExportAllDeclaration({ node }: any) {
       imports.push({ source: node.source.value, isDynamic: false });
     },
 
+    // import('./heavy-module') — в Babel 8 это ImportExpression, не CallExpression
     ImportExpression({ node }: any) {
       if (node.source?.type === 'StringLiteral') {
         imports.push({ source: node.source.value, isDynamic: true });
@@ -67,7 +75,7 @@ export function parseImportsFromContent(
   return imports;
 }
 
-// Чтение файла с диска и парсинг
+// Читает файл с диска и парсит
 export async function parseImports(filePath: string): Promise<ParseResult> {
   try {
     const content = await readFile(filePath, 'utf-8');
