@@ -20,7 +20,7 @@ describe('FileScanner', () => {
     await writeFile(join(tmpDir, 'App.tsx'), '');
     await writeFile(join(tmpDir, 'utils.ts'), '');
     await writeFile(join(tmpDir, 'index.js'), '');
-    await writeFile(join(tmpDir, 'style.css'), ''); // не должен попасть
+    await writeFile(join(tmpDir, 'style.css'), '');
 
     const files = await scanFiles(tmpDir);
 

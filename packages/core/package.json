@@ -11,8 +11,13 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/babel__traverse": "^7.28.0",
+    "@types/node": "^20.14.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0",
-    "@types/node": "^20.14.0"
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "@babel/parser": "^8.0.0",
+    "@babel/traverse": "^8.0.0"
   }
 }
