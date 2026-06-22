@@ -2,10 +2,10 @@ import type { AnalyzeSummary } from '../types';
 
 export interface Project {
   id: string;
-  path: string;
-  name: string;
-  summary: AnalyzeSummary | null;
-  lastAnalyzed: string | null;
+  name: string;         // zip filename without extension — display name
+  fileName: string;     // original zip filename e.g. "my-project.zip"
+  summary: AnalyzeSummary;
+  lastAnalyzed: string; // ISO date
 }
 
 const STORAGE_KEY = 'cda:projects';
@@ -23,17 +23,16 @@ export function saveProjects(projects: Project[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
   } catch {
-    // quota or private browsing — silently skip
+    // quota or private browsing
   }
 }
 
-export function makeProject(path: string): Project {
-  const name = path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? path;
+export function makeProject(fileName: string, summary: AnalyzeSummary): Project {
   return {
     id: crypto.randomUUID(),
-    path,
-    name,
-    summary: null,
-    lastAnalyzed: null,
+    name: fileName.replace(/\.zip$/i, ''),
+    fileName,
+    summary,
+    lastAnalyzed: new Date().toISOString(),
   };
 }

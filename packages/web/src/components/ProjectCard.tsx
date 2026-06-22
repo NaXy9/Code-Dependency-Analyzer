@@ -1,161 +1,104 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { api } from '../api/client';
+import { Trash2, FileCode2, GitMerge, AlertTriangle } from 'lucide-react';
+import { Link } from 'wouter';
 import { useApp } from '../store/AppContext';
 import type { Project } from '../store/projectsStore';
 
 interface Props {
   project: Project;
-  onOpen: () => void;
 }
 
-export function ProjectCard({ project, onOpen }: Props) {
-  const { updateProject } = useApp();
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: () => api.analyze(project.path),
-    onSuccess: (data) => {
-      updateProject(project.id, {
-        summary: data,
-        lastAnalyzed: new Date().toISOString(),
-      });
-      // Bust the cached graph/cycles/metrics for this project path
-      queryClient.invalidateQueries({ queryKey: ['graph', project.path] });
-      queryClient.invalidateQueries({ queryKey: ['cycles', project.path] });
-      queryClient.invalidateQueries({ queryKey: ['metrics', project.path] });
-      onOpen();
-    },
-  });
-
-  const { summary, name, path, lastAnalyzed } = project;
+export function ProjectCard({ project }: Props) {
+  const { removeProject } = useApp();
+  const { id, name, fileName, lastAnalyzed, summary } = project;
 
   return (
-    <Card
-      className="flex flex-col"
-      style={{
-        background: '#0f0f1a',
-        border: '1px solid rgba(99,102,241,0.12)',
-      }}
+    <div
+      className="relative overflow-hidden rounded-lg
+                 border border-white/[0.08]
+                 bg-white/[0.04]
+                 backdrop-blur-sm
+                 transition-all duration-200
+                 hover:border-violet-500/40
+                 hover:bg-white/[0.06]
+                 group"
     >
-      <CardHeader className="pb-3 space-y-1">
-        <div className="flex items-start justify-between gap-3">
-          <span className="font-mono text-sm leading-tight" style={{ color: '#e2e8f0' }}>
-            {name}
-          </span>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Badge
-              variant="outline"
-              className="font-mono text-[10px] h-5 px-1.5 rounded"
-              style={{ borderColor: 'rgba(99,102,241,0.3)', color: '#6366f1' }}
-            >
-              ts
-            </Badge>
-            {lastAnalyzed && (
-              <span className="font-mono text-[10px]" style={{ color: '#6b7280' }}>
-                {format(new Date(lastAnalyzed), 'yyyy-MM-dd')}
-              </span>
-            )}
+      {/* Left accent bar */}
+      <div className="absolute top-0 left-0 w-1 h-full bg-violet-500/20 group-hover:bg-violet-500 transition-colors duration-200" />
+
+      {/* Header */}
+      <div className="px-5 pt-5 pb-4 flex items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <Link href={`/project/${id}`}>
+            <span className="font-mono text-lg font-semibold text-white/90 truncate block hover:text-violet-400 hover:underline underline-offset-4 transition-colors cursor-pointer">
+              {name}
+            </span>
+          </Link>
+
+          <div className="flex items-center gap-2 mt-2">
+            <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-400">
+              {fileName?.endsWith?.('.zip') ? 'zip' : 'ts'}
+            </span>
+            <span className="font-mono text-[10px] text-white/30">
+              {format(new Date(lastAnalyzed), 'yyyy-MM-dd HH:mm')}
+            </span>
           </div>
         </div>
-        <p
-          className="font-mono text-[11px] truncate"
-          style={{ color: '#374151' }}
-          title={path}
+
+        {/* Delete — hidden until hover */}
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeProject(id); }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                     p-1.5 rounded text-white/30 hover:text-red-400 hover:bg-red-500/10
+                     -mt-1 -mr-1 cursor-pointer"
         >
-          {path}
-        </p>
-      </CardHeader>
-
-      {/* ── separator ── */}
-      <div style={{ borderTop: '1px solid rgba(99,102,241,0.08)', marginInline: 24 }} />
-
-      <CardContent className="py-4">
-        {summary ? (
-          <div className="grid grid-cols-3 gap-3">
-            <StatCell label="FILES" value={summary.fileCount} />
-            <StatCell label="DEPS" value={summary.edgeCount} />
-            <StatCell
-              label="CYCLES"
-              value={summary.cycleCount}
-              error={summary.cycleCount > 0}
-            />
-          </div>
-        ) : (
-          <div
-            className="text-center py-3 rounded font-mono text-[11px]"
-            style={{
-              border: '1px dashed rgba(99,102,241,0.1)',
-              color: '#374151',
-            }}
-          >
-            NOT_ANALYZED
-          </div>
-        )}
-
-        {mutation.isError && (
-          <div
-            className="mt-3 px-3 py-2 rounded font-mono text-[11px] break-all"
-            style={{
-              background: 'rgba(249,115,22,0.06)',
-              border: '1px solid rgba(249,115,22,0.2)',
-              color: '#f97316',
-            }}
-          >
-            {(mutation.error as Error).message}
-          </div>
-        )}
-      </CardContent>
-
-      {/* ── separator ── */}
-      <div style={{ borderTop: '1px solid rgba(99,102,241,0.08)', marginInline: 24 }} />
-
-      <CardFooter className="pt-3">
-        <Button
-          onClick={() => mutation.mutate()}
-          disabled={mutation.isPending}
-          variant="outline"
-          className="w-full font-mono text-xs tracking-widest h-9 transition-all"
-          style={{
-            borderColor: 'rgba(99,102,241,0.25)',
-            color: mutation.isPending ? '#6b7280' : '#6366f1',
-            background: mutation.isPending ? 'transparent' : 'rgba(99,102,241,0.06)',
-          }}
-        >
-          {mutation.isPending ? 'ANALYZING\u2026' : 'ANALYZE_PROJECT'}
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function StatCell({
-  label,
-  value,
-  error,
-}: {
-  label: string;
-  value: number;
-  error?: boolean;
-}) {
-  return (
-    <div className="text-center">
-      <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: '#6b7280' }}>
-        {label}
+          <Trash2 size={15} />
+        </button>
       </div>
-      <div
-        className="font-mono text-xl leading-tight mt-0.5 tabular-nums"
-        style={{ color: error ? '#f97316' : '#6366f1' }}
-      >
-        {value.toLocaleString()}
+
+      {/* Metric mini-cards */}
+      <div className="px-5 pb-4 grid grid-cols-3 gap-2">
+
+        <div className="flex flex-col p-2.5 rounded border border-white/[0.06] bg-black/20">
+          <span className="font-mono text-[9px] text-white/40 mb-1.5 flex items-center gap-1">
+            <FileCode2 size={10} /> FILES
+          </span>
+          <span className="font-mono text-base font-medium text-white/80">
+            {summary.fileCount}
+          </span>
+        </div>
+
+        <div className="flex flex-col p-2.5 rounded border border-white/[0.06] bg-black/20">
+          <span className="font-mono text-[9px] text-white/40 mb-1.5 flex items-center gap-1">
+            <GitMerge size={10} /> DEPS
+          </span>
+          <span className="font-mono text-base font-medium text-white/80">
+            {summary.edgeCount}
+          </span>
+        </div>
+
+        <div className="flex flex-col p-2.5 rounded border border-white/[0.06] bg-black/20">
+          <span className="font-mono text-[9px] text-white/40 mb-1.5 flex items-center gap-1">
+            <AlertTriangle size={10} /> CYCLES
+          </span>
+          <span className={`font-mono text-base font-medium ${
+            summary.cycleCount > 0 ? 'text-orange-400' : 'text-green-400'
+          }`}>
+            {summary.cycleCount}
+          </span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-5 pb-5">
+        <Link href={`/project/${id}`} className="block w-full">
+          <button className="w-full font-mono text-xs py-2.5 rounded
+                             border border-white/10 bg-white/5 text-white/60 tracking-widest
+                             hover:bg-violet-500/15 hover:text-violet-400 hover:border-violet-500/30
+                             transition-colors duration-200 cursor-pointer">
+            OPEN_PROJECT
+          </button>
+        </Link>
       </div>
     </div>
   );

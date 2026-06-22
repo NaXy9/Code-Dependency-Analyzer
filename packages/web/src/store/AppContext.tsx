@@ -12,17 +12,19 @@ import {
   makeProject,
   type Project,
 } from './projectsStore';
+import type { AnalyzeSummary } from '../types';
 
 interface AppState {
   projects: Project[];
   currentProjectId: string | null;
-  currentProjectPath: string | null;
+  /** UUID of the current project — used as React Query cache key */
+  currentProjectKey: string | null;
   selectedNode: string | null;
   sidebarExpanded: boolean;
 }
 
 interface AppActions {
-  addProject: (path: string) => Project;
+  addProject: (fileName: string, summary: AnalyzeSummary) => Project;
   removeProject: (id: string) => void;
   updateProject: (id: string, patch: Partial<Project>) => void;
   setCurrentProject: (id: string | null) => void;
@@ -41,18 +43,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
-  const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
-  const currentProjectPath = currentProject?.path ?? null;
+  // currentProjectKey === currentProjectId (UUID); used as RQ cache key
+  const currentProjectKey = currentProjectId;
 
   useEffect(() => {
     saveProjects(projects);
   }, [projects]);
 
-  const addProject = useCallback((path: string): Project => {
-    const p = makeProject(path);
-    setProjects((prev) => [...prev, p]);
-    return p;
-  }, []);
+  const addProject = useCallback(
+    (fileName: string, summary: AnalyzeSummary): Project => {
+      const p = makeProject(fileName, summary);
+      setProjects((prev) => [...prev, p]);
+      return p;
+    },
+    []
+  );
 
   const removeProject = useCallback((id: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
@@ -80,7 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         projects,
         currentProjectId,
-        currentProjectPath,
+        currentProjectKey,
         selectedNode,
         sidebarExpanded,
         addProject,

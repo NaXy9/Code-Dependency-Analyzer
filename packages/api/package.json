@@ -9,14 +9,18 @@
   },
   "dependencies": {
     "@dep-analyzer/core": "workspace:*",
+    "adm-zip": "^0.5.17",
+    "cors": "^2.8.5",
     "express": "^4.19.0",
-    "cors": "^2.8.5"
+    "multer": "^2.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "tsx": "^4.11.0",
-    "@types/node": "^20.14.0",
+    "@types/adm-zip": "^0.5.8",
+    "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17"
+    "@types/multer": "^2.1.0",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.0"
   }
 }

@@ -6,6 +6,7 @@ import { detectNodeType, NODE_COLORS } from '../../lib/nodeType';
 
 interface SimNode extends d3.SimulationNodeDatum {
   id: string;
+  label: string;
   fanIn: number;
   fanOut: number;
   externalImports: string[];
@@ -16,14 +17,20 @@ interface SimLink extends d3.SimulationLinkDatum<SimNode> {
 }
 
 function nodeRadius(d: SimNode): number {
-  return 4 + Math.min(d.fanIn + d.fanOut, 24) * 0.45;
+  return 5 + Math.min(d.fanIn + d.fanOut, 24) * 0.4;
+}
+
+const MAX_LABEL_LEN = 18;
+
+function truncate(s: string): string {
+  return s.length > MAX_LABEL_LEN ? s.slice(0, MAX_LABEL_LEN - 1) + '…' : s;
 }
 
 export function GraphCanvas() {
   const svgRef = useRef<SVGSVGElement>(null);
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
-  const { currentProjectPath, toggleSelectedNode, selectedNode } = useApp();
-  const { data, isLoading, error } = useGraph(currentProjectPath);
+  const { currentProjectKey, toggleSelectedNode, selectedNode } = useApp();
+  const { data, isLoading, error } = useGraph(currentProjectKey);
 
   useLayoutEffect(() => {
     if (!data || !svgRef.current) return;
@@ -54,14 +61,17 @@ export function GraphCanvas() {
     const linkLayer = root.append('g').attr('class', 'links');
     const nodeLayer = root.append('g').attr('class', 'nodes');
 
+    // ── edges ──────────────────────────────────────────────────────────────
     const link = linkLayer
       .selectAll<SVGLineElement, SimLink>('line')
       .data(links)
       .join('line')
-      .attr('stroke', (d) => (d.dynamic ? '#f97316' : 'rgba(99,102,241,0.18)'))
-      .attr('stroke-width', (d) => (d.dynamic ? 1.5 : 0.8))
-      .attr('stroke-dasharray', (d) => (d.dynamic ? '4 2' : null));
+      .attr('stroke', (d) => (d.dynamic ? '#f97316' : '#374151'))
+      .attr('stroke-width', (d) => (d.dynamic ? 1.5 : 1))
+      .attr('stroke-dasharray', (d) => (d.dynamic ? '4 2' : null))
+      .attr('marker-end', (d) => (d.dynamic ? 'url(#arrow-dynamic)' : 'url(#arrow)'));
 
+    // ── nodes ──────────────────────────────────────────────────────────────
     const nodeG = nodeLayer
       .selectAll<SVGGElement, SimNode>('g.node')
       .data(nodes, (d) => d.id)
@@ -77,17 +87,27 @@ export function GraphCanvas() {
       .attr('stroke', '#0a0a0f')
       .attr('stroke-width', 1.5);
 
+    // Label uses d.label (basename from API)
+    nodeG
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 9)
+      .attr('fill', '#6b7280')
+      .attr('font-family', '"Fira Code", monospace')
+      .attr('pointer-events', 'none')
+      .attr('y', (d) => nodeRadius(d) + 11)
+      .text((d) => truncate(d.label));
+
     nodeG.append('title').text(
       (d) =>
-        `${d.id}\n──────────────\nfan-in : ${d.fanIn}\nfan-out: ${d.fanOut}\nexternal: ${
+        `${d.id}\n──────────\nfan-in : ${d.fanIn}\nfan-out: ${d.fanOut}\nexternal: ${
           d.externalImports.join(', ') || '—'
         }`
     );
 
-    nodeG.on('click', (_event, d) => {
-      toggleSelectedNode(d.id);
-    });
+    nodeG.on('click', (_event, d) => toggleSelectedNode(d.id));
 
+    // ── drag ───────────────────────────────────────────────────────────────
     nodeG.call(
       d3
         .drag<SVGGElement, SimNode>()
@@ -107,21 +127,18 @@ export function GraphCanvas() {
         })
     );
 
+    // ── simulation ─────────────────────────────────────────────────────────
     const isLarge = nodes.length > 400;
 
     const sim = d3
       .forceSimulation<SimNode, SimLink>(nodes)
       .force(
         'link',
-        d3
-          .forceLink<SimNode, SimLink>(links)
-          .id((d) => d.id)
-          .distance(55)
-          .strength(0.4)
+        d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(70).strength(0.4)
       )
-      .force('charge', d3.forceManyBody<SimNode>().strength(isLarge ? -25 : -70))
+      .force('charge', d3.forceManyBody<SimNode>().strength(isLarge ? -30 : -80))
       .force('center', d3.forceCenter(W / 2, H / 2).strength(0.05))
-      .force('collision', d3.forceCollide<SimNode>().radius((d) => nodeRadius(d) + 1.5))
+      .force('collision', d3.forceCollide<SimNode>().radius((d) => nodeRadius(d) + 14))
       .alphaDecay(isLarge ? 0.06 : 0.028);
 
     simRef.current = sim;
@@ -143,6 +160,7 @@ export function GraphCanvas() {
       sim.on('tick', applyPositions);
     }
 
+    // ── zoom ───────────────────────────────────────────────────────────────
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.05, 12])
@@ -150,7 +168,6 @@ export function GraphCanvas() {
 
     svg.call(zoom).on('dblclick.zoom', null);
 
-    // Initial fit
     const padding = 40;
     const xs = nodes.map((n) => n.x!).filter(isFinite);
     const ys = nodes.map((n) => n.y!).filter(isFinite);
@@ -168,7 +185,7 @@ export function GraphCanvas() {
       );
     }
 
-    return () => sim.stop();
+    return () => { sim.stop(); };
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -179,16 +196,14 @@ export function GraphCanvas() {
       .attr('stroke-width', (d) => (d.id === selectedNode ? 2.5 : 1.5))
       .attr('fill-opacity', (d) => {
         if (selectedNode === null) return 0.85;
-        return d.id === selectedNode ? 1 : 0.22;
+        return d.id === selectedNode ? 1 : 0.2;
       });
   }, [selectedNode]);
 
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <span className="font-mono text-sm animate-pulse" style={{ color: '#6b7280' }}>
-          LOADING_GRAPH...
-        </span>
+        <span className="font-mono text-sm text-muted-foreground animate-pulse">LOADING_GRAPH...</span>
       </div>
     );
   }
@@ -196,9 +211,7 @@ export function GraphCanvas() {
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <span className="font-mono text-sm" style={{ color: '#f97316' }}>
-          ERROR: {(error as Error).message}
-        </span>
+        <span className="font-mono text-sm text-destructive">ERROR: {(error as Error).message}</span>
       </div>
     );
   }
@@ -206,13 +219,9 @@ export function GraphCanvas() {
   if (!data) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="font-mono text-[11px]" style={{ color: '#374151' }}>
-            NO_GRAPH_DATA
-          </div>
-          <div className="font-mono text-[11px]" style={{ color: '#374151' }}>
-            run ANALYZE_PROJECT to populate
-          </div>
+        <div className="text-center space-y-1">
+          <div className="font-mono text-[11px] text-muted-foreground">NO_GRAPH_DATA</div>
+          <div className="font-mono text-[11px] text-muted-foreground/40">upload a .zip archive to analyze</div>
         </div>
       </div>
     );
@@ -220,49 +229,36 @@ export function GraphCanvas() {
 
   return (
     <div className="flex-1 relative overflow-hidden">
-      <svg ref={svgRef} className="w-full h-full" style={{ background: 'transparent' }} />
+      <svg ref={svgRef} className="w-full h-full" style={{ background: 'transparent' }}>
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4b5563" />
+          </marker>
+          <marker id="arrow-dynamic" viewBox="0 0 10 10" refX="18" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#f97316" />
+          </marker>
+        </defs>
+      </svg>
 
       {/* Legend */}
       <div
         className="absolute bottom-4 left-4 rounded p-3 flex flex-col gap-1.5 pointer-events-none"
-        style={{
-          background: 'rgba(15,15,26,0.85)',
-          border: '1px solid rgba(99,102,241,0.1)',
-          backdropFilter: 'blur(4px)',
-        }}
+        style={{ background: 'rgba(15,15,26,0.85)', border: '1px solid rgba(99,102,241,0.1)', backdropFilter: 'blur(4px)' }}
       >
-        {(
-          [
-            ['component', '#6366f1'],
-            ['hook', '#8b5cf6'],
-            ['util', '#22c55e'],
-            ['store', '#f59e0b'],
-            ['page', '#ec4899'],
-          ] as const
-        ).map(([label, color]) => (
+        {(Object.entries(NODE_COLORS) as [string, string][]).map(([label, color]) => (
           <div key={label} className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-            <span className="font-mono text-[10px] uppercase" style={{ color: '#6b7280' }}>
-              {label}
-            </span>
+            <span className="font-mono text-[10px] uppercase text-muted-foreground">{label}</span>
           </div>
         ))}
         <div className="flex items-center gap-2 mt-1">
           <div className="w-4 h-px border-t border-dashed border-orange-500 opacity-60" />
-          <span className="font-mono text-[10px] uppercase" style={{ color: '#6b7280' }}>
-            dynamic
-          </span>
+          <span className="font-mono text-[10px] uppercase text-muted-foreground">dynamic</span>
         </div>
       </div>
 
-      {/* Zoom hint */}
-      <div
-        className="absolute bottom-4 right-4 font-mono text-[10px] text-right pointer-events-none"
-        style={{ color: '#374151' }}
-      >
-        scroll · zoom &nbsp;|&nbsp; drag · pan
-        <br />
-        click · inspect
+      <div className="absolute bottom-4 right-4 font-mono text-[10px] text-right text-muted-foreground/40 pointer-events-none">
+        scroll · zoom &nbsp;|&nbsp; drag · pan<br />click · inspect
       </div>
     </div>
   );

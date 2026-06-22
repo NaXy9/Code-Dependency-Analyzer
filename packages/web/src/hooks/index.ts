@@ -1,47 +1,41 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 
-/**
- * projectPath is part of the query key so each project has its own cache slot.
- * The API itself is stateless and just returns the latest analysis — the key
- * controls when we consider the cached data valid vs stale.
- */
-
-export function useGraph(projectPath: string | null) {
+export function useGraph(projectKey: string | null) {
   return useQuery({
-    queryKey: ['graph', projectPath],
+    queryKey: ['graph', projectKey],
     queryFn: api.graph,
-    enabled: !!projectPath,
+    enabled: !!projectKey,
     staleTime: Infinity,
     gcTime: Infinity,
   });
 }
 
-export function useCycles(projectPath: string | null) {
+export function useCycles(projectKey: string | null) {
   return useQuery({
-    queryKey: ['cycles', projectPath],
+    queryKey: ['cycles', projectKey],
     queryFn: api.cycles,
-    enabled: !!projectPath,
+    enabled: !!projectKey,
     staleTime: Infinity,
     gcTime: Infinity,
   });
 }
 
-export function useMetrics(projectPath: string | null, topN = 15) {
+export function useMetrics(projectKey: string | null, topN = 15) {
   return useQuery({
-    queryKey: ['metrics', projectPath, topN],
+    queryKey: ['metrics', projectKey, topN],
     queryFn: () => api.metrics(topN),
-    enabled: !!projectPath,
+    enabled: !!projectKey,
     staleTime: Infinity,
     gcTime: Infinity,
   });
 }
 
-export function useImpact(projectPath: string | null, file: string | null) {
+export function useImpact(projectKey: string | null, file: string | null) {
   return useQuery({
-    queryKey: ['impact', projectPath, file],
+    queryKey: ['impact', projectKey, file],
     queryFn: () => api.impact(file!),
-    enabled: !!projectPath && file !== null,
+    enabled: !!projectKey && file !== null,
     staleTime: Infinity,
     gcTime: Infinity,
   });

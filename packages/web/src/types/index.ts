@@ -1,5 +1,6 @@
 export interface GraphNodeDTO {
-  id: string;
+  id: string;     // relative path — used for edges, /api/impact, uniqueness
+  label: string;  // basename — for graph rendering
   externalImports: string[];
   fanIn: number;
   fanOut: number;

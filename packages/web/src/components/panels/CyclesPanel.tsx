@@ -1,119 +1,75 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { RefreshCw, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useCycles } from '../../hooks';
 import { useApp } from '../../store/AppContext';
 
-function severity(length: number): { label: string; color: string } {
-  if (length >= 5) return { label: 'HIGH', color: '#f97316' };
-  if (length >= 3) return { label: 'MED', color: '#f59e0b' };
-  return { label: 'LOW', color: '#22c55e' };
+type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
+
+function getSeverity(length: number): Severity {
+  if (length >= 5) return 'HIGH';
+  if (length >= 3) return 'MEDIUM';
+  return 'LOW';
 }
 
+const SEVERITY_STYLES: Record<Severity, { card: React.CSSProperties; badge: string; icon: string }> = {
+  LOW:    { card: { background: 'rgba(245,158,11,0.04)', borderColor: 'rgba(245,158,11,0.2)' },  badge: 'border-amber-500/30 text-amber-500',  icon: 'text-amber-500' },
+  MEDIUM: { card: { background: 'rgba(249,115,22,0.04)', borderColor: 'rgba(249,115,22,0.2)' },  badge: 'border-orange-500/30 text-orange-500', icon: 'text-orange-500' },
+  HIGH:   { card: { background: 'rgba(239,68,68,0.04)',  borderColor: 'rgba(239,68,68,0.2)' },   badge: 'border-red-500/30 text-red-500',       icon: 'text-red-500' },
+};
+
 export function CyclesPanel() {
-  const { currentProjectPath } = useApp();
-  const { data: cycles, isLoading, error } = useCycles(currentProjectPath);
+  const { currentProjectKey } = useApp();
+  const { data: cycles, isLoading, error } = useCycles(currentProjectKey);
 
-  if (isLoading) {
-    return (
-      <Shell>
-        <span className="font-mono text-sm animate-pulse" style={{ color: '#6b7280' }}>
-          RESOLVING_CYCLES...
-        </span>
-      </Shell>
-    );
-  }
-
-  if (error) {
-    return (
-      <Shell>
-        <span className="font-mono text-sm" style={{ color: '#f97316' }}>
-          ERROR: {(error as Error).message}
-        </span>
-      </Shell>
-    );
-  }
+  if (isLoading) return <Shell><span className="font-mono text-sm text-muted-foreground animate-pulse">RESOLVING_CYCLES...</span></Shell>;
+  if (error)     return <Shell><span className="font-mono text-sm text-destructive">ERROR: {(error as Error).message}</span></Shell>;
 
   if (!cycles?.length) {
     return (
       <Shell>
-        <div className="text-center space-y-2">
-          <div className="font-mono text-3xl" style={{ color: '#22c55e' }}>✓</div>
-          <div className="font-mono text-sm" style={{ color: '#e2e8f0' }}>
-            NO_CYCLES_DETECTED
-          </div>
-          <div className="font-mono text-[11px]" style={{ color: '#374151' }}>
-            dependency graph is acyclic
-          </div>
+        <div className="text-center space-y-3">
+          <RefreshCw size={48} className="mx-auto text-green-500 opacity-50" />
+          <div className="font-mono text-lg text-green-500">NO_CIRCULAR_DEPENDENCIES</div>
+          <div className="font-mono text-xs text-muted-foreground">Architecture is clean.</div>
         </div>
       </Shell>
     );
   }
 
   return (
-    <div className="p-6 space-y-3 max-w-3xl mx-auto">
-      <div className="font-mono text-[11px] mb-4" style={{ color: '#6b7280' }}>
+    <div className="p-6 space-y-3 max-w-4xl mx-auto">
+      <div className="font-mono text-[11px] text-muted-foreground mb-4">
         {cycles.length} CYCLE{cycles.length !== 1 ? 'S' : ''} DETECTED
-        <span style={{ color: '#374151' }}> — refactor to break circular dependencies</span>
+        <span className="text-muted-foreground/40"> — refactor to break circular dependencies</span>
       </div>
-
       {cycles.map((cycle, i) => {
-        const sev = severity(cycle.length);
+        const sev = getSeverity(cycle.length);
+        const styles = SEVERITY_STYLES[sev];
         return (
-          <Card
-            key={i}
-            style={{
-              background: 'rgba(249,115,22,0.04)',
-              border: '1px solid rgba(249,115,22,0.2)',
-            }}
-          >
-            <CardHeader className="pb-2 pt-4 px-4">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] uppercase tracking-widest" style={{ color: '#6b7280' }}>
-                  CYCLE_{String(i + 1).padStart(3, '0')}
-                </span>
-                <Badge
-                  variant="outline"
-                  className="font-mono text-[10px] h-5 px-1.5"
-                  style={{ borderColor: `${sev.color}50`, color: sev.color }}
-                >
-                  {sev.label}
-                </Badge>
-                <span className="font-mono text-[10px]" style={{ color: '#374151' }}>
-                  {cycle.length} nodes
-                </span>
+          <Card key={i} style={{ border: '1px solid', ...styles.card }}>
+            <CardHeader className="pb-3 pt-4 px-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={13} className={styles.icon} />
+                  <span className="font-mono text-sm font-bold text-foreground">CYCLE_{String(i + 1).padStart(3, '0')}</span>
+                </div>
+                <Badge variant="outline" className={`font-mono text-[10px] ${styles.badge}`}>{sev}_SEVERITY</Badge>
               </div>
             </CardHeader>
-
             <CardContent className="px-4 pb-4">
-              <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {cycle.map((file, j) => (
-                  <div key={j} className="flex items-start gap-2">
-                    <span
-                      className="font-mono text-[11px] w-4 flex-shrink-0 mt-px select-none"
-                      style={{ color: 'rgba(249,115,22,0.35)' }}
-                    >
-                      {j === 0 ? '┌' : j === cycle.length - 1 ? '└' : '│'}
-                    </span>
-                    <span
-                      className="font-mono text-[11px] break-all leading-relaxed"
-                      style={{ color: '#9ca3af' }}
-                    >
+                  <div key={j} className="flex items-center gap-1.5">
+                    <div className="bg-background/50 border border-border/50 rounded px-2 py-1 font-mono text-xs text-foreground max-w-[180px] truncate" title={file}>
                       {file}
-                    </span>
+                    </div>
+                    {j < cycle.length - 1
+                      ? <ArrowRight size={12} className="text-muted-foreground/40 flex-shrink-0" />
+                      : <RefreshCw size={12} className={`flex-shrink-0 animate-spin-slow ${styles.icon} opacity-60`} />
+                    }
                   </div>
                 ))}
-                {/* close arrow back to root */}
-                <div className="flex items-center gap-2">
-                  <span
-                    className="font-mono text-[11px] w-4 select-none"
-                    style={{ color: 'rgba(249,115,22,0.25)' }}
-                  >
-                    ↺
-                  </span>
-                  <span className="font-mono text-[11px] break-all" style={{ color: 'rgba(249,115,22,0.35)' }}>
-                    {cycle[0]}
-                  </span>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -124,7 +80,5 @@ export function CyclesPanel() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex-1 flex items-center justify-center h-full">{children}</div>
-  );
+  return <div className="flex-1 flex items-center justify-center h-full">{children}</div>;
 }

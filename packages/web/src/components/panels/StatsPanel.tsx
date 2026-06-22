@@ -1,195 +1,125 @@
 import { useMemo } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { useMetrics, useGraph } from '../../hooks';
+import { FileCode2, GitBranch } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { useGraph, useCycles } from '../../hooks';
 import { useApp } from '../../store/AppContext';
-import type { MetricEntry } from '../../types';
+import { detectNodeType, NODE_COLORS, type NodeType } from '../../lib/nodeType';
+
+const TYPE_ORDER: NodeType[] = ['component', 'hook', 'util', 'store', 'page', 'module'];
 
 export function StatsPanel() {
-  const { currentProjectPath } = useApp();
-  const { data: metrics, isLoading: metricsLoading } = useMetrics(currentProjectPath, 12);
-  const { data: graphData } = useGraph(currentProjectPath);
-
-  const fileTypes = useMemo(() => {
-    if (!graphData) return [];
-    const counts = new Map<string, number>();
-    for (const node of graphData.nodes) {
-      const ext = node.id.includes('.')
-        ? '.' + node.id.split('.').at(-1)!
-        : 'no-ext';
-      counts.set(ext, (counts.get(ext) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([ext, count]) => ({ ext, count }));
-  }, [graphData]);
+  const { currentProjectKey } = useApp();
+  const { data: graphData, isLoading } = useGraph(currentProjectKey);
+  const { data: cycles } = useCycles(currentProjectKey);
 
   const totalFiles = graphData?.nodes.length ?? 0;
+  const totalDependencies = graphData?.edges.length ?? 0;
+  const avgDependenciesPerFile = totalFiles > 0 ? totalDependencies / totalFiles : 0;
+  const circularDepsCount = cycles?.length ?? 0;
 
-  if (metricsLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <span className="font-mono text-sm animate-pulse" style={{ color: '#6b7280' }}>
-          COMPUTING_STATS...
-        </span>
-      </div>
-    );
+  const typeBreakdown = useMemo(() => {
+    const counts = new Map<NodeType, number>();
+    for (const node of graphData?.nodes ?? []) {
+      const t = detectNodeType(node.id);
+      counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    return TYPE_ORDER
+      .map((type) => ({ type, color: NODE_COLORS[type], count: counts.get(type) ?? 0 }))
+      .filter(({ count }) => count > 0);
+  }, [graphData]);
+
+  const topByFanIn  = useMemo(() => [...(graphData?.nodes ?? [])].sort((a, b) => b.fanIn - a.fanIn).slice(0, 5),  [graphData]);
+  const topByFanOut = useMemo(() => [...(graphData?.nodes ?? [])].sort((a, b) => b.fanOut - a.fanOut).slice(0, 5), [graphData]);
+
+  if (isLoading) {
+    return <div className="flex-1 flex items-center justify-center"><span className="font-mono text-sm text-muted-foreground animate-pulse">COMPUTING_STATS...</span></div>;
   }
 
   return (
-    <div className="p-6 grid grid-cols-1 xl:grid-cols-2 gap-5 max-w-5xl mx-auto">
-      {/* TOP_FAN_IN */}
-      <MetricCard
-        title="TOP_FAN_IN"
-        subtitle="most imported — high coupling risk"
-        entries={metrics?.topByFanIn ?? []}
-        metricKey="fanIn"
-        accentColor="#6366f1"
-      />
+    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+      {/* 4 summary cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <SummaryCard label="TOTAL_FILES"       value={totalFiles} />
+        <SummaryCard label="TOTAL_DEPS"        value={totalDependencies} />
+        <SummaryCard label="AVG_DEPS_PER_FILE" value={avgDependenciesPerFile.toFixed(1)} />
+        <SummaryCard label="CIRCULAR_DEPS"     value={circularDepsCount}
+          valueColor={circularDepsCount > 0 ? 'text-red-500' : 'text-green-500'} />
+      </div>
 
-      {/* TOP_FAN_OUT */}
-      <MetricCard
-        title="TOP_FAN_OUT"
-        subtitle="most dependencies — refactor candidates"
-        entries={metrics?.topByFanOut ?? []}
-        metricKey="fanOut"
-        accentColor="#f59e0b"
-      />
-
-      {/* FILE_TYPES */}
-      {fileTypes.length > 0 && (
-        <Card
-          className="xl:col-span-2"
-          style={{ background: '#0f0f1a', border: '1px solid rgba(99,102,241,0.12)' }}
-        >
-          <CardHeader className="pb-0">
-            <SectionTitle title="FILE_TYPES" subtitle={`${totalFiles} files total`} />
-          </CardHeader>
-          <CardContent className="pt-3">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {fileTypes.map(({ ext, count }) => {
-                const pct = totalFiles > 0 ? (count / totalFiles) * 100 : 0;
-                return (
-                  <div
-                    key={ext}
-                    className="rounded p-3"
-                    style={{
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(99,102,241,0.08)',
-                    }}
-                  >
-                    <div className="flex items-baseline justify-between mb-2">
-                      <span className="font-mono text-xs" style={{ color: '#e2e8f0' }}>
-                        {ext}
-                      </span>
-                      <span className="font-mono text-sm tabular-nums" style={{ color: '#6366f1' }}>
-                        {count}
-                      </span>
-                    </div>
-                    <div className="h-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.15)' }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${pct}%`, background: '#6366f1', opacity: 0.6 }}
-                      />
-                    </div>
-                    <div className="font-mono text-[10px] mt-1" style={{ color: '#6b7280' }}>
-                      {pct.toFixed(1)}%
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function MetricCard({
-  title,
-  subtitle,
-  entries,
-  metricKey,
-  accentColor,
-}: {
-  title: string;
-  subtitle: string;
-  entries: MetricEntry[];
-  metricKey: 'fanIn' | 'fanOut';
-  accentColor: string;
-}) {
-  const max = Math.max(...entries.map((e) => e[metricKey]), 1);
-
-  return (
-    <Card style={{ background: '#0f0f1a', border: '1px solid rgba(99,102,241,0.12)' }}>
-      <CardHeader className="pb-0">
-        <SectionTitle title={title} subtitle={subtitle} />
-      </CardHeader>
-      <CardContent className="pt-3">
-        {entries.length === 0 ? (
-          <div className="font-mono text-[11px] text-center py-4" style={{ color: '#374151' }}>
-            NO_DATA
-          </div>
-        ) : (
-          <ul className="space-y-2.5">
-            {entries.map((entry, i) => {
-              const val = entry[metricKey];
-              const pct = (val / max) * 100;
-              const filename = entry.filePath.split('/').pop() ?? entry.filePath;
-              const dir = entry.filePath.includes('/')
-                ? entry.filePath.slice(0, entry.filePath.lastIndexOf('/') + 1)
-                : '';
-
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* TYPE_BREAKDOWN */}
+        <div className="space-y-4">
+          <SectionHeader icon={<FileCode2 size={13} />} label="TYPE_BREAKDOWN" />
+          <div className="space-y-3">
+            {typeBreakdown.map(({ type, color, count }) => {
+              const pct = totalFiles > 0 ? (count / totalFiles) * 100 : 0;
               return (
-                <li key={entry.filePath}>
-                  <div className="flex items-baseline justify-between gap-3 mb-1">
-                    <div className="flex items-baseline gap-1.5 overflow-hidden">
-                      <span
-                        className="font-mono text-[10px] flex-shrink-0 tabular-nums"
-                        style={{ color: `${accentColor}50` }}
-                      >
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <span
-                        className="font-mono text-[11px] truncate"
-                        title={entry.filePath}
-                      >
-                        <span style={{ color: '#374151' }}>{dir}</span>
-                        <span style={{ color: '#e2e8f0' }}>{filename}</span>
-                      </span>
-                    </div>
-                    <span
-                      className="font-mono text-sm flex-shrink-0 tabular-nums"
-                      style={{ color: accentColor }}
-                    >
-                      {val}
-                    </span>
+                <div key={type}>
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <span className="font-mono text-xs uppercase text-foreground">{type}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{count}&nbsp;·&nbsp;{pct.toFixed(1)}%</span>
                   </div>
-                  <div className="h-px rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${pct}%`, background: accentColor, opacity: 0.55 }}
-                    />
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
                   </div>
-                </li>
+                </div>
               );
             })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+          </div>
+        </div>
 
-function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div>
-      <div className="font-mono text-xs uppercase tracking-widest" style={{ color: '#e2e8f0' }}>
-        {title}
-      </div>
-      <div className="font-mono text-[10px] mt-0.5" style={{ color: '#6b7280' }}>
-        {subtitle}
+        {/* MOST_IMPORTED + MOST_DEPENDENT */}
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <SectionHeader icon={<GitBranch size={13} />} label="MOST_IMPORTED (TOP 5)" />
+            {topByFanIn.length === 0 ? <Empty /> : (
+              <ul className="space-y-1.5">
+                {topByFanIn.map((n) => <FileRow key={n.id} filePath={n.id} badge={`${n.fanIn} IMPORTS`} />)}
+              </ul>
+            )}
+          </div>
+          <div className="space-y-2">
+            <SectionHeader icon={<GitBranch size={13} style={{ transform: 'rotate(180deg)' }} />} label="MOST_DEPENDENT (TOP 5)" />
+            {topByFanOut.length === 0 ? <Empty /> : (
+              <ul className="space-y-1.5">
+                {topByFanOut.map((n) => <FileRow key={n.id} filePath={n.id} badge={`${n.fanOut} DEPS`} />)}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+function SummaryCard({ label, value, valueColor = 'text-foreground' }: { label: string; value: string | number; valueColor?: string }) {
+  return (
+    <div className="bg-card/30 border border-border/50 rounded-lg p-4">
+      <div className="font-mono text-[10px] text-muted-foreground tracking-wider mb-2">{label}</div>
+      <div className={`font-mono text-2xl font-light tabular-nums ${valueColor}`}>{value}</div>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-2 pb-2 border-b border-border/50">
+      <span className="text-muted-foreground">{icon}</span>
+      <span className="font-mono text-sm font-bold text-muted-foreground tracking-wider">{label}</span>
+    </div>
+  );
+}
+
+function FileRow({ filePath, badge }: { filePath: string; badge: string }) {
+  const filename = filePath.replace(/\\/g, '/').split('/').pop() ?? filePath;
+  return (
+    <li className="flex items-center justify-between gap-3 p-2 bg-card/30 border border-border/50 rounded">
+      <span className="font-mono text-xs truncate text-foreground" title={filePath}>{filename}</span>
+      <Badge variant="outline" className="font-mono text-[10px] flex-shrink-0 border-border/50">{badge}</Badge>
+    </li>
+  );
+}
+
+function Empty() {
+  return <p className="font-mono text-[11px] text-muted-foreground italic">— no data</p>;
 }

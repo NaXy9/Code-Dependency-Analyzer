@@ -1,8 +1,9 @@
-import { relative } from 'path';
+import { relative, basename } from 'path';
 import type { DependencyGraph } from '@dep-analyzer/core';
 
 export interface GraphNodeDTO {
-  id: string;
+  id: string;       // relative path — уникальный ключ, используй для edges и /api/impact
+  label: string;    // basename — то что показывать на графе
   externalImports: string[];
   fanIn: number;
   fanOut: number;
@@ -26,6 +27,7 @@ export function serializeGraph(
   for (const [absPath, node] of graph) {
     nodes.push({
       id: rel(absPath),
+      label: basename(absPath),
       externalImports: node.externalImports,
       fanIn: node.importedBy.length,
       fanOut: node.imports.length + node.dynamicImports.length,

@@ -17,20 +17,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  analyze: (projectPath: string) =>
-    request<AnalyzeSummary>(`${BASE}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectPath }),
-    }),
+  /** Upload a .zip archive for analysis. Browser sets Content-Type + boundary automatically. */
+  analyze: (file: File) => {
+    const body = new FormData();
+    body.append('archive', file);
+    return request<AnalyzeSummary>(`${BASE}/analyze`, { method: 'POST', body });
+  },
 
-  graph: () => request<GraphResponse>(`${BASE}/graph`),
-
-  cycles: () => request<string[][]>(`${BASE}/cycles`),
-
-  impact: (file: string) =>
-    request<ImpactResponse>(`${BASE}/impact?file=${encodeURIComponent(file)}`),
-
-  metrics: (topN = 10) =>
-    request<MetricsResponse>(`${BASE}/metrics?topN=${topN}`),
+  graph:   () => request<GraphResponse>(`${BASE}/graph`),
+  cycles:  () => request<string[][]>(`${BASE}/cycles`),
+  impact:  (file: string) => request<ImpactResponse>(`${BASE}/impact?file=${encodeURIComponent(file)}`),
+  metrics: (topN = 15)    => request<MetricsResponse>(`${BASE}/metrics?topN=${topN}`),
 };
