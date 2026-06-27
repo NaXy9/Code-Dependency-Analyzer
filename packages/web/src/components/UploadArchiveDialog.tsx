@@ -1,20 +1,12 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Upload, FileArchive, X } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { X, Upload, FileArchive } from 'lucide-react';
 import { api } from '../api/client';
 import { useApp } from '../store/AppContext';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** If provided — reanalyze mode: update existing project instead of creating new one */
   projectId?: string;
   onDone: (projectId: string) => void;
 }
@@ -25,15 +17,26 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-
   const { addProject, updateProject } = useApp();
+
+  // Reset state when dialog opens
+  useEffect(() => {
+    if (open) { setFile(null); setFileError(null); }
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mutation = useMutation({
     mutationFn: (f: File) => api.analyze(f),
     onSuccess: (summary, f) => {
       let id: string;
       if (projectId) {
-        // Reanalyze mode — update existing
         updateProject(projectId, {
           summary,
           lastAnalyzed: new Date().toISOString(),
@@ -45,16 +48,18 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
         queryClient.invalidateQueries({ queryKey: ['cycles', id] });
         queryClient.invalidateQueries({ queryKey: ['metrics', id] });
       } else {
-        // Create mode — add new project
         const project = addProject(f.name, summary);
         id = project.id;
-        // No need to invalidate — cache for new UUID is empty
       }
       onDone(id);
-      setFile(null);
-      onOpenChange(false);
+      handleClose();
     },
   });
+
+  function handleClose() {
+    if (mutation.isPending) return;
+    onOpenChange(false);
+  }
 
   function handleFile(f: File) {
     if (!f.name.toLowerCase().endsWith('.zip')) {
@@ -72,108 +77,91 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
     if (f) handleFile(f);
   }
 
-  const isReanalyze = !!projectId;
+  if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!mutation.isPending) { onOpenChange(v); setFile(null); setFileError(null); } }}>
-      <DialogContent
-        className="max-w-md"
-        style={{ background: '#0f0f1a', border: '1px solid rgba(99,102,241,0.15)' }}
-      >
-        <DialogHeader>
-          <DialogTitle className="font-mono text-sm uppercase tracking-widest" style={{ color: '#e2e8f0' }}>
-            {isReanalyze ? 'REANALYZE_PROJECT' : 'UPLOAD_ARCHIVE'}
-          </DialogTitle>
-        </DialogHeader>
+    /* Overlay */
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+    >
+      {/* Modal panel */}
+      <div className="relative w-full max-w-md rounded-xl border border-white/[0.10] bg-[#0d0d18]/95 backdrop-blur-md shadow-2xl p-6 flex flex-col gap-5">
 
-        <div className="space-y-4 mt-1">
-          {/* Dropzone */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => inputRef.current?.click()}
-            onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
-            onDrop={handleDrop}
-            className="relative flex flex-col items-center justify-center gap-3 rounded-lg cursor-pointer transition-all select-none"
-            style={{
-              minHeight: 140,
-              border: `1px dashed ${dragging ? 'rgba(99,102,241,0.6)' : fileError ? 'rgba(249,115,22,0.4)' : 'rgba(99,102,241,0.2)'}`,
-              background: dragging ? 'rgba(99,102,241,0.06)' : 'rgba(0,0,0,0.2)',
-            }}
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2 className="font-mono text-base font-bold text-white/90 tracking-wider">
+            {projectId ? 'REANALYZE_PROJECT' : 'UPLOAD_ARCHIVE'}
+          </h2>
+          <button
+            onClick={handleClose}
+            className="text-white/30 hover:text-white/60 transition-colors cursor-pointer p-1 rounded hover:bg-white/[0.06]"
           >
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".zip"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
-            />
-
-            {file ? (
-              <>
-                <FileArchive size={28} style={{ color: '#6366f1' }} />
-                <div className="text-center">
-                  <div className="font-mono text-sm" style={{ color: '#e2e8f0' }}>
-                    {file.name}
-                  </div>
-                  <div className="font-mono text-[11px] mt-0.5" style={{ color: '#6b7280' }}>
-                    {(file.size / 1024).toFixed(0)} KB
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                  className="absolute top-2 right-2 p-1 rounded hover:bg-white/10 transition-colors"
-                  style={{ color: '#6b7280' }}
-                >
-                  <X size={12} />
-                </button>
-              </>
-            ) : (
-              <>
-                <Upload size={24} style={{ color: dragging ? '#6366f1' : '#6b7280' }} />
-                <div className="text-center">
-                  <div className="font-mono text-xs" style={{ color: '#6b7280' }}>
-                    drop .zip archive here
-                  </div>
-                  <div className="font-mono text-[11px] mt-0.5" style={{ color: '#374151' }}>
-                    or click to browse
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {fileError && (
-            <p className="font-mono text-[11px]" style={{ color: '#f97316' }}>
-              ✗&nbsp;{fileError}
-            </p>
-          )}
-
-          {mutation.isError && (
-            <div
-              className="px-3 py-2 rounded font-mono text-[11px] break-all"
-              style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)', color: '#f97316' }}
-            >
-              {(mutation.error as Error).message}
-            </div>
-          )}
-
-          <Button
-            onClick={() => file && mutation.mutate(file)}
-            disabled={!file || mutation.isPending}
-            className="w-full font-mono text-xs tracking-widest h-9"
-            style={{
-              background: file && !mutation.isPending ? 'rgba(99,102,241,0.12)' : 'transparent',
-              color: file && !mutation.isPending ? '#6366f1' : '#6b7280',
-              border: '1px solid rgba(99,102,241,0.3)',
-            }}
-          >
-            {mutation.isPending ? 'ANALYZING\u2026' : '[ ANALYZE ]'}
-          </Button>
+            <X size={16} />
+          </button>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Drop zone */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-3 py-12 px-6 cursor-pointer transition-colors select-none ${
+            dragging
+              ? 'border-violet-500/60 bg-violet-500/10'
+              : 'border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04] hover:border-violet-500/40'
+          }`}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".zip"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+          />
+
+          {file ? (
+            <>
+              <FileArchive size={32} className="text-violet-400" />
+              <span className="font-mono text-sm text-violet-400 font-medium text-center break-all">
+                {file.name}
+              </span>
+              <span className="font-mono text-xs text-white/30">
+                {(file.size / 1024).toFixed(0)} KB — click to change
+              </span>
+            </>
+          ) : (
+            <>
+              <Upload size={32} className="text-white/25" />
+              <span className="font-mono text-sm text-white/50">drop .zip archive here</span>
+              <span className="font-mono text-xs text-white/30">or click to browse</span>
+            </>
+          )}
+        </div>
+
+        {/* Errors */}
+        {fileError && (
+          <p className="font-mono text-xs text-orange-400">✗ {fileError}</p>
+        )}
+        {mutation.isError && (
+          <p className="font-mono text-xs text-orange-400 break-all">
+            ERROR: {(mutation.error as Error).message}
+          </p>
+        )}
+
+        {/* Analyze button */}
+        <button
+          onClick={() => file && mutation.mutate(file)}
+          disabled={!file || mutation.isPending}
+          className="w-full py-2.5 rounded font-mono text-xs font-bold tracking-widest bg-violet-600 hover:bg-violet-500 text-white border border-violet-500/50 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {mutation.isPending ? 'ANALYZING\u2026' : 'ANALYZE'}
+        </button>
+      </div>
+    </div>
   );
 }

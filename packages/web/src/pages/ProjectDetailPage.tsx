@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { AnimatePresence } from 'framer-motion';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+import { ChevronLeft, GitBranch, RefreshCw, BarChart2 } from 'lucide-react';
 import { AppShell } from '../components/layout/AppShell';
-import { TopBar } from '../components/layout/TopBar';
 import { GraphCanvas } from '../components/graph/GraphCanvas';
 import { DetailPanel } from '../components/panels/DetailPanel';
 import { CyclesPanel } from '../components/panels/CyclesPanel';
@@ -12,10 +10,13 @@ import { StatsPanel } from '../components/panels/StatsPanel';
 import { UploadArchiveDialog } from '../components/UploadArchiveDialog';
 import { useApp } from '../store/AppContext';
 
+type ActiveTab = 'graph' | 'cycles' | 'stats';
+
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { projects, setCurrentProject, selectedNode, setSelectedNode } = useApp();
+  const [activeTab, setActiveTab] = useState<ActiveTab>('graph');
   const [reanalyzeOpen, setReanalyzeOpen] = useState(false);
 
   const project = projects.find((p) => p.id === id) ?? null;
@@ -29,6 +30,10 @@ export function ProjectDetailPage() {
   }, [project, navigate]);
 
   useEffect(() => {
+    if (activeTab !== 'graph') setSelectedNode(null);
+  }, [activeTab, setSelectedNode]);
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedNode(null); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -36,22 +41,106 @@ export function ProjectDetailPage() {
 
   if (!project) return null;
 
+  const { name, fileName, summary } = project;
+  const framework = fileName?.endsWith?.('.zip') ? 'zip' : 'ts';
+
   return (
     <AppShell>
-      <TopBar
-        title={project.name}
-        subtitle={project.fileName}
-        actions={
-          <Button
-            variant="outline"
-            onClick={() => setReanalyzeOpen(true)}
-            className="font-mono text-[11px] tracking-widest h-8 px-3"
-            style={{ borderColor: 'rgba(99,102,241,0.3)', color: '#6366f1', background: 'rgba(99,102,241,0.06)' }}
+      {/* ── Header ── */}
+      <header className="flex-none px-6 py-4 border-b border-white/[0.06] bg-white/[0.02] backdrop-blur flex items-center justify-between z-10">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/')}
+            className="p-1.5 rounded text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
-            REANALYZE
-          </Button>
-        }
-      />
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <h1 className="font-mono text-xl font-bold text-white/90 flex items-center gap-3">
+              {name}
+              <span className="font-mono text-xs px-2 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-400">
+                {framework}
+              </span>
+            </h1>
+            <div className="flex items-center gap-4 mt-1 font-mono text-xs text-white/40">
+              <span>NODES: {summary.fileCount}</span>
+              <span>EDGES: {summary.edgeCount}</span>
+              <span className={summary.cycleCount > 0 ? 'text-orange-400' : 'text-green-400'}>
+                CYCLES: {summary.cycleCount}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setReanalyzeOpen(true)}
+          className="font-mono text-xs tracking-widest px-3 py-1.5 rounded border border-white/10 text-white/40 hover:text-violet-400 hover:border-violet-500/30 hover:bg-violet-500/10 transition-colors cursor-pointer"
+        >
+          REANALYZE
+        </button>
+      </header>
+
+      {/* ── Tab bar ── */}
+      <div className="flex-none px-6 pt-4 border-b border-white/[0.06] bg-white/[0.02]">
+        <div className="flex gap-1">
+          <button
+            onClick={() => setActiveTab('graph')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-t font-mono text-xs transition-colors cursor-pointer ${
+              activeTab === 'graph'
+                ? 'bg-violet-500/20 text-violet-400 border border-violet-500/20 border-b-0'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+            }`}
+          >
+            <GitBranch size={13} /> DEPENDENCY_GRAPH
+          </button>
+          <button
+            onClick={() => setActiveTab('cycles')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-t font-mono text-xs transition-colors cursor-pointer ${
+              activeTab === 'cycles'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20 border-b-0'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+            }`}
+          >
+            <RefreshCw size={13} /> CYCLES ({summary.cycleCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-t font-mono text-xs transition-colors cursor-pointer ${
+              activeTab === 'stats'
+                ? 'bg-violet-500/20 text-violet-400 border border-violet-500/20 border-b-0'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+            }`}
+          >
+            <BarChart2 size={13} /> STATISTICS
+          </button>
+        </div>
+      </div>
+
+      {/* ── Tab content ── */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+
+        {activeTab === 'graph' && (
+          /* relative required for DetailPanel's absolute positioning */
+          <div className="flex-1 relative overflow-hidden">
+            <GraphCanvas />
+            <AnimatePresence>
+              {selectedNode && <DetailPanel key={selectedNode} />}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {activeTab === 'cycles' && (
+          <div className="flex-1 overflow-auto">
+            <CyclesPanel />
+          </div>
+        )}
+
+        {activeTab === 'stats' && (
+          <div className="flex-1 overflow-auto">
+            <StatsPanel />
+          </div>
+        )}
+      </div>
 
       <UploadArchiveDialog
         open={reanalyzeOpen}
@@ -59,39 +148,6 @@ export function ProjectDetailPage() {
         projectId={id}
         onDone={() => setReanalyzeOpen(false)}
       />
-
-      <Tabs
-        defaultValue="graph"
-        className="flex-1 flex flex-col overflow-hidden"
-        onValueChange={() => setSelectedNode(null)}
-      >
-        <div className="flex-shrink-0 px-6" style={{ borderBottom: '1px solid rgba(99,102,241,0.1)' }}>
-          <TabsList className="h-10 gap-0 rounded-none bg-transparent p-0">
-            {(['graph', 'cycles', 'stats'] as const).map((tab) => (
-              <TabsTrigger
-                key={tab}
-                value={tab}
-                className="font-mono text-[11px] uppercase tracking-widest rounded-none h-10 px-5 bg-transparent border-b-2 border-transparent text-zinc-600 data-[state=active]:border-indigo-500 data-[state=active]:text-indigo-400 data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-zinc-400 transition-colors"
-              >
-                {tab}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-
-        <TabsContent value="graph" className="flex-1 flex overflow-hidden mt-0 data-[state=inactive]:hidden">
-          <GraphCanvas />
-          <AnimatePresence>{selectedNode && <DetailPanel />}</AnimatePresence>
-        </TabsContent>
-
-        <TabsContent value="cycles" className="flex-1 overflow-auto mt-0 data-[state=inactive]:hidden">
-          <CyclesPanel />
-        </TabsContent>
-
-        <TabsContent value="stats" className="flex-1 overflow-auto mt-0 data-[state=inactive]:hidden">
-          <StatsPanel />
-        </TabsContent>
-      </Tabs>
     </AppShell>
   );
 }

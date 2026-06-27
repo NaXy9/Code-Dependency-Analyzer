@@ -1,9 +1,18 @@
 import { useMemo } from 'react';
 import { FileCode2, GitBranch } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { useGraph, useCycles } from '../../hooks';
 import { useApp } from '../../store/AppContext';
-import { detectNodeType, NODE_COLORS, type NodeType } from '../../lib/nodeType';
+import { detectNodeType, type NodeType } from '../../lib/nodeType';
+
+const TYPE_COLORS: Record<string, string> = {
+  component: '#6366f1',
+  hook:      '#8b5cf6',
+  util:      '#22c55e',
+  store:     '#f59e0b',
+  page:      '#ec4899',
+  module:    '#06b6d4',
+  other:     '#6b7280',
+};
 
 const TYPE_ORDER: NodeType[] = ['component', 'hook', 'util', 'store', 'page', 'module'];
 
@@ -12,55 +21,130 @@ export function StatsPanel() {
   const { data: graphData, isLoading } = useGraph(currentProjectKey);
   const { data: cycles } = useCycles(currentProjectKey);
 
-  const totalFiles = graphData?.nodes.length ?? 0;
-  const totalDependencies = graphData?.edges.length ?? 0;
-  const avgDependenciesPerFile = totalFiles > 0 ? totalDependencies / totalFiles : 0;
-  const circularDepsCount = cycles?.length ?? 0;
+  const stats = useMemo(() => {
+    const nodes = graphData?.nodes ?? [];
+    const edges = graphData?.edges ?? [];
 
-  const typeBreakdown = useMemo(() => {
-    const counts = new Map<NodeType, number>();
-    for (const node of graphData?.nodes ?? []) {
+    const totalFiles = nodes.length;
+    const totalDependencies = edges.length;
+    const avgDependenciesPerFile = totalFiles > 0 ? totalDependencies / totalFiles : 0;
+    const circularDepsCount = cycles?.length ?? 0;
+
+    // TYPE_BREAKDOWN
+    const typeCounts = new Map<string, number>();
+    for (const node of nodes) {
       const t = detectNodeType(node.id);
-      counts.set(t, (counts.get(t) ?? 0) + 1);
+      typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
     }
-    return TYPE_ORDER
-      .map((type) => ({ type, color: NODE_COLORS[type], count: counts.get(type) ?? 0 }))
+    const filesByType = TYPE_ORDER
+      .map((type) => ({ type, count: typeCounts.get(type) ?? 0 }))
       .filter(({ count }) => count > 0);
-  }, [graphData]);
 
-  const topByFanIn  = useMemo(() => [...(graphData?.nodes ?? [])].sort((a, b) => b.fanIn - a.fanIn).slice(0, 5),  [graphData]);
-  const topByFanOut = useMemo(() => [...(graphData?.nodes ?? [])].sort((a, b) => b.fanOut - a.fanOut).slice(0, 5), [graphData]);
+    // MOST_IMPORTED — highest fanIn
+    const mostImportedFiles = [...nodes]
+      .sort((a, b) => b.fanIn - a.fanIn)
+      .slice(0, 5)
+      .map((n) => ({ path: n.id, count: n.fanIn }));
+
+    // MOST_DEPENDENT — highest fanOut
+    const mostImportingFiles = [...nodes]
+      .sort((a, b) => b.fanOut - a.fanOut)
+      .slice(0, 5)
+      .map((n) => ({ path: n.id, count: n.fanOut }));
+
+    return {
+      totalFiles,
+      totalDependencies,
+      avgDependenciesPerFile,
+      circularDepsCount,
+      filesByType,
+      mostImportedFiles,
+      mostImportingFiles,
+    };
+  }, [graphData, cycles]);
 
   if (isLoading) {
-    return <div className="flex-1 flex items-center justify-center"><span className="font-mono text-sm text-muted-foreground animate-pulse">COMPUTING_STATS...</span></div>;
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <span className="font-mono text-sm text-white/40 animate-pulse">
+          COMPUTING_STATS...
+        </span>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
-      {/* 4 summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryCard label="TOTAL_FILES"       value={totalFiles} />
-        <SummaryCard label="TOTAL_DEPS"        value={totalDependencies} />
-        <SummaryCard label="AVG_DEPS_PER_FILE" value={avgDependenciesPerFile.toFixed(1)} />
-        <SummaryCard label="CIRCULAR_DEPS"     value={circularDepsCount}
-          valueColor={circularDepsCount > 0 ? 'text-red-500' : 'text-green-500'} />
+    <div className="p-6 max-w-5xl mx-auto">
+
+      {/* ── 4 summary cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+
+        <div className="p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] flex flex-col">
+          <span className="font-mono text-[10px] text-white/40 mb-2 tracking-widest">
+            TOTAL_FILES
+          </span>
+          <span className="font-mono text-2xl font-light text-white/90">
+            {stats.totalFiles}
+          </span>
+        </div>
+
+        <div className="p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] flex flex-col">
+          <span className="font-mono text-[10px] text-white/40 mb-2 tracking-widest">
+            TOTAL_DEPS
+          </span>
+          <span className="font-mono text-2xl font-light text-white/90">
+            {stats.totalDependencies}
+          </span>
+        </div>
+
+        <div className="p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] flex flex-col">
+          <span className="font-mono text-[10px] text-white/40 mb-2 tracking-widest">
+            AVG_DEPS_PER_FILE
+          </span>
+          <span className="font-mono text-2xl font-light text-white/90">
+            {stats.avgDependenciesPerFile.toFixed(1)}
+          </span>
+        </div>
+
+        <div className="p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] flex flex-col">
+          <span className="font-mono text-[10px] text-white/40 mb-2 tracking-widest">
+            CIRCULAR_DEPS
+          </span>
+          <span className={`font-mono text-2xl font-light ${
+            stats.circularDepsCount > 0 ? 'text-orange-400' : 'text-green-400'
+          }`}>
+            {stats.circularDepsCount}
+          </span>
+        </div>
+
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* ── Two-column section ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
         {/* TYPE_BREAKDOWN */}
         <div className="space-y-4">
-          <SectionHeader icon={<FileCode2 size={13} />} label="TYPE_BREAKDOWN" />
+          <h3 className="font-mono text-xs font-bold text-white/40 tracking-widest flex items-center gap-2 border-b border-white/[0.06] pb-2">
+            <FileCode2 size={14} /> TYPE_BREAKDOWN
+          </h3>
+
           <div className="space-y-3">
-            {typeBreakdown.map(({ type, color, count }) => {
-              const pct = totalFiles > 0 ? (count / totalFiles) * 100 : 0;
+            {stats.filesByType.map(({ type, count }) => {
+              const color = TYPE_COLORS[type] ?? TYPE_COLORS.other;
+              const pct = stats.totalFiles > 0
+                ? Math.round((count / stats.totalFiles) * 100)
+                : 0;
               return (
-                <div key={type}>
-                  <div className="flex items-baseline justify-between mb-1.5">
-                    <span className="font-mono text-xs uppercase text-foreground">{type}</span>
-                    <span className="font-mono text-[11px] text-muted-foreground">{count}&nbsp;·&nbsp;{pct.toFixed(1)}%</span>
+                <div key={type} className="space-y-1.5">
+                  <div className="flex justify-between font-mono text-xs">
+                    <span className="text-white/70 uppercase">{type}</span>
+                    <span className="text-white/40">{count} · {pct}%</span>
                   </div>
-                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+                  <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${pct}%`, backgroundColor: color }}
+                    />
                   </div>
                 </div>
               );
@@ -69,57 +153,54 @@ export function StatsPanel() {
         </div>
 
         {/* MOST_IMPORTED + MOST_DEPENDENT */}
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <SectionHeader icon={<GitBranch size={13} />} label="MOST_IMPORTED (TOP 5)" />
-            {topByFanIn.length === 0 ? <Empty /> : (
-              <ul className="space-y-1.5">
-                {topByFanIn.map((n) => <FileRow key={n.id} filePath={n.id} badge={`${n.fanIn} IMPORTS`} />)}
-              </ul>
-            )}
+        <div className="space-y-8">
+
+          {/* MOST_IMPORTED */}
+          <div className="space-y-3">
+            <h3 className="font-mono text-xs font-bold text-white/40 tracking-widest flex items-center gap-2 border-b border-white/[0.06] pb-2">
+              <GitBranch size={14} /> MOST_IMPORTED (TOP 5)
+            </h3>
+            <div className="space-y-2">
+              {stats.mostImportedFiles.map((f, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded border border-white/[0.06] bg-white/[0.02]">
+                  <span className="font-mono text-xs text-white/70 truncate mr-3" title={f.path}>
+                    {f.path.replace(/\\/g, '/').split('/').pop()}
+                  </span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-white/[0.08] bg-white/[0.04] text-white/50 whitespace-nowrap shrink-0">
+                    {f.count} IMPORTS
+                  </span>
+                </div>
+              ))}
+              {stats.mostImportedFiles.length === 0 && (
+                <p className="font-mono text-[11px] text-white/20 italic">— no data</p>
+              )}
+            </div>
           </div>
-          <div className="space-y-2">
-            <SectionHeader icon={<GitBranch size={13} style={{ transform: 'rotate(180deg)' }} />} label="MOST_DEPENDENT (TOP 5)" />
-            {topByFanOut.length === 0 ? <Empty /> : (
-              <ul className="space-y-1.5">
-                {topByFanOut.map((n) => <FileRow key={n.id} filePath={n.id} badge={`${n.fanOut} DEPS`} />)}
-              </ul>
-            )}
+
+          {/* MOST_DEPENDENT */}
+          <div className="space-y-3">
+            <h3 className="font-mono text-xs font-bold text-white/40 tracking-widest flex items-center gap-2 border-b border-white/[0.06] pb-2">
+              <GitBranch size={14} style={{ transform: 'rotate(180deg)' }} /> MOST_DEPENDENT (TOP 5)
+            </h3>
+            <div className="space-y-2">
+              {stats.mostImportingFiles.map((f, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded border border-white/[0.06] bg-white/[0.02]">
+                  <span className="font-mono text-xs text-white/70 truncate mr-3" title={f.path}>
+                    {f.path.replace(/\\/g, '/').split('/').pop()}
+                  </span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-white/[0.08] bg-white/[0.04] text-white/50 whitespace-nowrap shrink-0">
+                    {f.count} DEPS
+                  </span>
+                </div>
+              ))}
+              {stats.mostImportingFiles.length === 0 && (
+                <p className="font-mono text-[11px] text-white/20 italic">— no data</p>
+              )}
+            </div>
           </div>
+
         </div>
       </div>
     </div>
   );
-}
-
-function SummaryCard({ label, value, valueColor = 'text-foreground' }: { label: string; value: string | number; valueColor?: string }) {
-  return (
-    <div className="bg-card/30 border border-border/50 rounded-lg p-4">
-      <div className="font-mono text-[10px] text-muted-foreground tracking-wider mb-2">{label}</div>
-      <div className={`font-mono text-2xl font-light tabular-nums ${valueColor}`}>{value}</div>
-    </div>
-  );
-}
-
-function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 pb-2 border-b border-border/50">
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="font-mono text-sm font-bold text-muted-foreground tracking-wider">{label}</span>
-    </div>
-  );
-}
-
-function FileRow({ filePath, badge }: { filePath: string; badge: string }) {
-  const filename = filePath.replace(/\\/g, '/').split('/').pop() ?? filePath;
-  return (
-    <li className="flex items-center justify-between gap-3 p-2 bg-card/30 border border-border/50 rounded">
-      <span className="font-mono text-xs truncate text-foreground" title={filePath}>{filename}</span>
-      <Badge variant="outline" className="font-mono text-[10px] flex-shrink-0 border-border/50">{badge}</Badge>
-    </li>
-  );
-}
-
-function Empty() {
-  return <p className="font-mono text-[11px] text-muted-foreground italic">— no data</p>;
 }

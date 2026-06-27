@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
+import { Upload } from 'lucide-react';
 import { AppShell } from '../components/layout/AppShell';
 import { TopBar } from '../components/layout/TopBar';
 import { ProjectCard } from '../components/ProjectCard';
@@ -28,14 +29,10 @@ export function ProjectsPage() {
         actions={
           <button
             onClick={() => setDialogOpen(true)}
-            className="flex items-center gap-1.5 font-mono text-xs tracking-widest h-8 px-3 rounded border transition-colors"
-            style={{
-              borderColor: 'rgba(99,102,241,0.3)',
-              color: '#6366f1',
-              background: 'rgba(99,102,241,0.06)',
-            }}
+            className="flex items-center gap-2 px-4 py-2 rounded font-mono text-xs font-bold tracking-wide bg-violet-600 hover:bg-violet-500 text-white transition-colors cursor-pointer border border-violet-500/50"
           >
-            + UPLOAD_ARCHIVE
+            <Upload size={14} />
+            <span>UPLOAD_ARCHIVE</span>
           </button>
         }
       />
@@ -67,16 +64,13 @@ function EmptyState({ onUpload }: { onUpload: () => void }) {
   return (
     <button
       onClick={onUpload}
-      className="w-full flex flex-col items-center justify-center h-64 rounded-lg transition-colors hover:border-indigo-500/25"
-      style={{ border: '1px dashed rgba(99,102,241,0.15)' }}
+      className="w-full flex flex-col items-center justify-center h-64 rounded-lg transition-colors hover:border-violet-500/25 cursor-pointer"
+      style={{ border: '1px dashed rgba(139,92,246,0.15)' }}
     >
-      <div
-        className="font-mono text-[10px] uppercase tracking-widest mb-2"
-        style={{ color: '#6b7280' }}
-      >
+      <div className="font-mono text-[10px] uppercase tracking-widest mb-2 text-white/30">
         NO_PROJECTS
       </div>
-      <div className="font-mono text-[11px]" style={{ color: '#374151' }}>
+      <div className="font-mono text-[11px] text-white/20">
         click to upload a .zip archive
       </div>
     </button>
