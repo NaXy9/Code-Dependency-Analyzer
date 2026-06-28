@@ -13,6 +13,7 @@ import {
   type Project,
 } from './projectsStore';
 import type { AnalyzeSummary } from '../types';
+import { api } from '../api/client';
 
 interface AppState {
   projects: Project[];
@@ -24,7 +25,7 @@ interface AppState {
 }
 
 interface AppActions {
-  addProject: (fileName: string, summary: AnalyzeSummary) => Project;
+  addProject: (fileName: string, summary: AnalyzeSummary, id?: string) => Project;
   removeProject: (id: string) => void;
   updateProject: (id: string, patch: Partial<Project>) => void;
   setCurrentProject: (id: string | null) => void;
@@ -51,8 +52,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [projects]);
 
   const addProject = useCallback(
-    (fileName: string, summary: AnalyzeSummary): Project => {
-      const p = makeProject(fileName, summary);
+    (fileName: string, summary: AnalyzeSummary, id?: string): Project => {
+      const p = makeProject(fileName, summary, id);
       setProjects((prev) => [...prev, p]);
       return p;
     },
@@ -61,6 +62,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const removeProject = useCallback((id: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
+    // Best-effort: clean up the server-side store and JSON file
+    api.deleteProject(id).catch(() => {});
   }, []);
 
   const updateProject = useCallback((id: string, patch: Partial<Project>) => {

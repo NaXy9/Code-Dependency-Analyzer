@@ -6,16 +6,21 @@ interface AnalysisState {
   analyzedAt: Date;
 }
 
-let state: AnalysisState | null = null;
+// Multi-project store: projectId → AnalysisState
+const store = new Map<string, AnalysisState>();
 
-export function setAnalysis(projectPath: string, graph: DependencyGraph): void {
-  state = { projectPath, graph, analyzedAt: new Date() };
+export function setAnalysis(
+  projectId: string,
+  projectPath: string,
+  graph: DependencyGraph
+): void {
+  store.set(projectId, { projectPath, graph, analyzedAt: new Date() });
 }
 
-export function getAnalysis(): AnalysisState | null {
-  return state;
+export function getAnalysis(projectId: string): AnalysisState | null {
+  return store.get(projectId) ?? null;
 }
 
-export function clearAnalysis(): void {
-  state = null;
+export function deleteAnalysis(projectId: string): void {
+  store.delete(projectId);
 }

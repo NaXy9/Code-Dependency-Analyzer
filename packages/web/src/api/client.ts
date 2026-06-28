@@ -17,15 +17,35 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  /** Upload a .zip archive for analysis. Browser sets Content-Type + boundary automatically. */
-  analyze: (file: File) => {
+  /**
+   * Upload a .zip archive for analysis.
+   * projectId must match the id stored in the frontend project list so that
+   * the in-memory store and the persistence layer use the same key.
+   */
+  analyze: (file: File, projectId: string) => {
     const body = new FormData();
     body.append('archive', file);
+    body.append('projectId', projectId);
     return request<AnalyzeSummary>(`${BASE}/analyze`, { method: 'POST', body });
   },
 
-  graph:   () => request<GraphResponse>(`${BASE}/graph`),
-  cycles:  () => request<string[][]>(`${BASE}/cycles`),
-  impact:  (file: string) => request<ImpactResponse>(`${BASE}/impact?file=${encodeURIComponent(file)}`),
-  metrics: (topN = 15)    => request<MetricsResponse>(`${BASE}/metrics?topN=${topN}`),
+  graph:   (projectId: string) =>
+    request<GraphResponse>(`${BASE}/graph?projectId=${encodeURIComponent(projectId)}`),
+
+  cycles:  (projectId: string) =>
+    request<string[][]>(`${BASE}/cycles?projectId=${encodeURIComponent(projectId)}`),
+
+  metrics: (projectId: string, topN = 15) =>
+    request<MetricsResponse>(`${BASE}/metrics?projectId=${encodeURIComponent(projectId)}&topN=${topN}`),
+
+  impact:  (projectId: string, file: string) =>
+    request<ImpactResponse>(
+      `${BASE}/impact?projectId=${encodeURIComponent(projectId)}&file=${encodeURIComponent(file)}`
+    ),
+
+  /** Remove a project's analysis from the server store and disk. Best-effort. */
+  deleteProject: (projectId: string) =>
+    request<{ ok: boolean }>(`${BASE}/analyze/${encodeURIComponent(projectId)}`, {
+      method: 'DELETE',
+    }),
 };

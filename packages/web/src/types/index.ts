@@ -1,6 +1,6 @@
 export interface GraphNodeDTO {
-  id: string;     // relative path — used for edges, /api/impact, uniqueness
-  label: string;  // basename — for graph rendering
+  id: string;     // relative path — used for edges and /api/impact
+  label: string;  // basename — shown on the graph
   externalImports: string[];
   fanIn: number;
   fanOut: number;
@@ -22,6 +22,8 @@ export interface AnalyzeSummary {
   fileCount: number;
   edgeCount: number;
   cycleCount: number;
+  /** Primary framework detected from package.json / config files. */
+  framework: string;
 }
 
 export interface GraphResponse {

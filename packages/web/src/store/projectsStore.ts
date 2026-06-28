@@ -2,7 +2,7 @@ import type { AnalyzeSummary } from '../types';
 
 export interface Project {
   id: string;
-  name: string;         // zip filename without extension — display name
+  name: string;         // display name (zip filename without extension)
   fileName: string;     // original zip filename e.g. "my-project.zip"
   summary: AnalyzeSummary;
   lastAnalyzed: string; // ISO date
@@ -27,9 +27,18 @@ export function saveProjects(projects: Project[]): void {
   }
 }
 
-export function makeProject(fileName: string, summary: AnalyzeSummary): Project {
+/**
+ * @param id  Optional pre-generated UUID. Pass this when the ID was sent to the
+ *            API before the project was created in the store (new upload flow),
+ *            so that the frontend and backend share the same identifier.
+ */
+export function makeProject(
+  fileName: string,
+  summary: AnalyzeSummary,
+  id?: string
+): Project {
   return {
-    id: crypto.randomUUID(),
+    id: id ?? crypto.randomUUID(),
     name: fileName.replace(/\.zip$/i, ''),
     fileName,
     summary,

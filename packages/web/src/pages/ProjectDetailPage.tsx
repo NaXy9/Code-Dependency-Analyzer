@@ -9,13 +9,14 @@ import { CyclesPanel } from '../components/panels/CyclesPanel';
 import { StatsPanel } from '../components/panels/StatsPanel';
 import { UploadArchiveDialog } from '../components/UploadArchiveDialog';
 import { useApp } from '../store/AppContext';
+import { useGraph } from '../hooks';
 
 type ActiveTab = 'graph' | 'cycles' | 'stats';
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const { projects, setCurrentProject, selectedNode, setSelectedNode } = useApp();
+  const { projects, setCurrentProject, selectedNode, setSelectedNode, currentProjectKey } = useApp();
   const [activeTab, setActiveTab] = useState<ActiveTab>('graph');
   const [reanalyzeOpen, setReanalyzeOpen] = useState(false);
 
@@ -39,10 +40,20 @@ export function ProjectDetailPage() {
     return () => window.removeEventListener('keydown', handler);
   }, [setSelectedNode]);
 
+  // Auto-open the re-upload dialog when the server has no data for this project.
+  // This is a safety net for cases where the persistence file is missing
+  // (e.g. fresh deploy to a new server, manually deleted data/).
+  const { error: graphError } = useGraph(currentProjectKey);
+  useEffect(() => {
+    if (graphError && (graphError as Error).message.includes('No analysis available')) {
+      setReanalyzeOpen(true);
+    }
+  }, [graphError]);
+
   if (!project) return null;
 
-  const { name, fileName, summary } = project;
-  const framework = fileName?.endsWith?.('.zip') ? 'zip' : 'ts';
+  const { name, summary } = project;
+  const framework = summary.framework ?? 'zip';
 
   return (
     <AppShell>
@@ -118,9 +129,7 @@ export function ProjectDetailPage() {
 
       {/* ── Tab content ── */}
       <div className="flex-1 overflow-hidden flex flex-col">
-
         {activeTab === 'graph' && (
-          /* relative required for DetailPanel's absolute positioning */
           <div className="flex-1 relative overflow-hidden">
             <GraphCanvas />
             <AnimatePresence>
@@ -128,13 +137,11 @@ export function ProjectDetailPage() {
             </AnimatePresence>
           </div>
         )}
-
         {activeTab === 'cycles' && (
           <div className="flex-1 overflow-auto">
             <CyclesPanel />
           </div>
         )}
-
         {activeTab === 'stats' && (
           <div className="flex-1 overflow-auto">
             <StatsPanel />

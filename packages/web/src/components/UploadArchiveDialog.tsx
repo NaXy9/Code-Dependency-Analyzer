@@ -7,6 +7,7 @@ import { useApp } from '../store/AppContext';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pass when re-analysing an existing project. Omit for new uploads. */
   projectId?: string;
   onDone: (projectId: string) => void;
 }
@@ -19,10 +20,18 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
   const queryClient = useQueryClient();
   const { addProject, updateProject } = useApp();
 
-  // Reset state when dialog opens
+  // Pre-generate an ID for new projects so the frontend and backend
+  // always share the same identifier from the moment of upload.
+  const pendingIdRef = useRef(crypto.randomUUID());
+
+  // Reset state (and generate a fresh pending ID) each time the dialog opens
   useEffect(() => {
-    if (open) { setFile(null); setFileError(null); }
-  }, [open]);
+    if (open) {
+      setFile(null);
+      setFileError(null);
+      if (!projectId) pendingIdRef.current = crypto.randomUUID();
+    }
+  }, [open, projectId]);
 
   // Close on Escape
   useEffect(() => {
@@ -33,25 +42,30 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mutation = useMutation({
-    mutationFn: (f: File) => api.analyze(f),
+    mutationFn: (f: File) => {
+      // Use the existing project ID for re-analysis, or the pre-generated one for new projects
+      const id = projectId ?? pendingIdRef.current;
+      return api.analyze(f, id);
+    },
     onSuccess: (summary, f) => {
-      let id: string;
       if (projectId) {
+        // Re-analysis of an existing project
         updateProject(projectId, {
           summary,
           lastAnalyzed: new Date().toISOString(),
           fileName: f.name,
           name: f.name.replace(/\.zip$/i, ''),
         });
-        id = projectId;
-        queryClient.invalidateQueries({ queryKey: ['graph', id] });
-        queryClient.invalidateQueries({ queryKey: ['cycles', id] });
-        queryClient.invalidateQueries({ queryKey: ['metrics', id] });
+        queryClient.invalidateQueries({ queryKey: ['graph',   projectId] });
+        queryClient.invalidateQueries({ queryKey: ['cycles',  projectId] });
+        queryClient.invalidateQueries({ queryKey: ['metrics', projectId] });
+        onDone(projectId);
       } else {
-        const project = addProject(f.name, summary);
-        id = project.id;
+        // New project — use the pre-generated ID so it matches what the API persisted
+        const id = pendingIdRef.current;
+        addProject(f.name, summary, id);
+        onDone(id);
       }
-      onDone(id);
       handleClose();
     },
   });
@@ -80,12 +94,10 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
   if (!open) return null;
 
   return (
-    /* Overlay */
     <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
-      {/* Modal panel */}
       <div className="relative w-full max-w-md rounded-xl border border-white/[0.10] bg-[#0d0d18]/95 backdrop-blur-md shadow-2xl p-6 flex flex-col gap-5">
 
         {/* Header */}
@@ -143,7 +155,6 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
           )}
         </div>
 
-        {/* Errors */}
         {fileError && (
           <p className="font-mono text-xs text-orange-400">✗ {fileError}</p>
         )}
@@ -153,7 +164,6 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
           </p>
         )}
 
-        {/* Analyze button */}
         <button
           onClick={() => file && mutation.mutate(file)}
           disabled={!file || mutation.isPending}
