@@ -4,7 +4,8 @@
   "scripts": {
     "dev:api": "pnpm --filter @dep-analyzer/api dev",
     "dev:web": "pnpm --filter @dep-analyzer/web dev",
-    "build": "pnpm --filter @dep-analyzer/core build && pnpm --filter @dep-analyzer/api build",
+    "build": "pnpm --filter @dep-analyzer/core build && pnpm --filter @dep-analyzer/api build && pnpm --filter @dep-analyzer/web build",
+    "build:prod": "pnpm --filter @dep-analyzer/core build && pnpm --filter @dep-analyzer/api build && VITE_BASE_URL=/cda/ pnpm --filter @dep-analyzer/web build",
     "test": "pnpm --filter @dep-analyzer/core test"
   },
   "engines": {

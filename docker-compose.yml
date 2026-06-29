@@ -1,0 +1,17 @@
+services:
+  cda:
+    build: .
+    container_name: cda
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - cda-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - CORS_ORIGIN=https://yourdomain.com
+      - MAX_UPLOAD_MB=50
+
+volumes:
+  cda-data:

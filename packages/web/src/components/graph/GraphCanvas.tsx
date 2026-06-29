@@ -55,7 +55,6 @@ export function GraphCanvas() {
         dynamic: e.dynamic,
       }));
 
-    // Pre-compute connected node IDs for isolated-node charge tuning
     const connectedIds = new Set(
       data.edges.flatMap((e) => [e.source, e.target])
     );
@@ -115,7 +114,6 @@ export function GraphCanvas() {
     nodeG.on('click', (_event, d) => toggleSelectedNode(d.id));
 
     // ── drag ───────────────────────────────────────────────────────────────
-    // alphaTarget(0.2) instead of alpha(1) — gentle warmup, others don't scatter
     nodeG.call(
       d3
         .drag<SVGGElement, SimNode>()
@@ -125,7 +123,6 @@ export function GraphCanvas() {
           d.fy = d.y;
         })
         .on('drag', (event, d) => {
-          // Only update position — do NOT call restart() here
           d.fx = event.x;
           d.fy = event.y;
         })
@@ -152,13 +149,11 @@ export function GraphCanvas() {
       .force(
         'charge',
         d3.forceManyBody<SimNode>().strength((d) =>
-          // Isolated nodes get minimal repulsion so they don't fly to screen edge
           connectedIds.has(d.id) ? -180 : -30
         )
       )
       .force('center', d3.forceCenter(W / 2, H / 2).strength(0.08))
       .force('collide', d3.forceCollide<SimNode>().radius(25).strength(0.7))
-      // Soft boundary — keeps all nodes within the visible area
       .force('bounds', () => {
         for (const node of nodes) {
           if (node.x === undefined || node.y === undefined) continue;
@@ -168,7 +163,7 @@ export function GraphCanvas() {
           if (node.y > H - padding)     node.vy! -= (node.y - (H - padding)) * 0.05;
         }
       })
-      .alphaDecay(0.02); // slower cooling → more stable layout
+      .alphaDecay(0.02);
 
     simRef.current = sim;
 
@@ -181,7 +176,6 @@ export function GraphCanvas() {
       nodeG.attr('transform', (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     }
 
-    // For very large graphs run synchronously to avoid long RAF chain
     if (nodes.length > 400) {
       sim.stop();
       for (let i = 0; i < 300; i++) sim.tick();
@@ -198,7 +192,6 @@ export function GraphCanvas() {
 
     svg.call(zoom).on('dblclick.zoom', null);
 
-    // Initial fit-to-view after a short settle
     const fitTimer = setTimeout(() => {
       const xs = nodes.map((n) => n.x!).filter(isFinite);
       const ys = nodes.map((n) => n.y!).filter(isFinite);
@@ -221,7 +214,7 @@ export function GraphCanvas() {
       sim.stop();
       clearTimeout(fitTimer);
     };
-  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data]);
 
   // Highlight selected node
   useEffect(() => {
@@ -268,7 +261,6 @@ export function GraphCanvas() {
   return (
     <div className="w-full h-full relative">
       <svg ref={svgRef} width="100%" height="100%" style={{ background: 'transparent' }}>
-        {/* Hardcoded fill colors — Tailwind classes don't apply inside <defs> */}
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="18" refY="5"
             markerWidth="5" markerHeight="5" orient="auto">

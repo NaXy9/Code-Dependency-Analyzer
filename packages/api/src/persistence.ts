@@ -3,17 +3,14 @@ import { join, relative } from 'path';
 import type { DependencyGraph, GraphNode } from '@dep-analyzer/core';
 import { setAnalysis } from './store';
 
-// Configurable via DATA_DIR env var — useful for Docker volume mounts
 const DATA_DIR = process.env.DATA_DIR ?? join(process.cwd(), 'data');
 
-// Stable synthetic root used to reconstruct absolute paths after reload.
-// Avoids relying on the original temp dir (which is deleted on restart).
 function syntheticRoot(projectId: string): string {
   return join(DATA_DIR, 'snapshots', projectId);
 }
 
 interface PersistedNode {
-  id: string;              // relative path (relative to projectPath at analysis time)
+  id: string;
   imports: string[];
   importedBy: string[];
   externalImports: string[];
@@ -31,7 +28,6 @@ function ensureDataDir(): void {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 }
 
-/** Persist a project's graph as JSON to DATA_DIR/{projectId}.json */
 export function persistProject(
   projectId: string,
   projectPath: string,
@@ -39,9 +35,7 @@ export function persistProject(
   graph: DependencyGraph
 ): void {
   ensureDataDir();
-
   const rel = (abs: string) => relative(projectPath, abs);
-
   const nodes: PersistedNode[] = [];
   for (const [absId, node] of graph) {
     nodes.push({
@@ -52,14 +46,7 @@ export function persistProject(
       dynamicImports: node.dynamicImports.map(rel),
     });
   }
-
-  const data: PersistedProject = {
-    projectId,
-    framework,
-    analyzedAt: new Date().toISOString(),
-    nodes,
-  };
-
+  const data: PersistedProject = { projectId, framework, analyzedAt: new Date().toISOString(), nodes };
   try {
     writeFileSync(join(DATA_DIR, `${projectId}.json`), JSON.stringify(data), 'utf-8');
   } catch (err) {
@@ -67,36 +54,24 @@ export function persistProject(
   }
 }
 
-/** Remove a project's JSON file from disk */
 export function deletePersistedProject(projectId: string): void {
   const file = join(DATA_DIR, `${projectId}.json`);
   if (existsSync(file)) {
-    try {
-      rmSync(file);
-    } catch (err) {
+    try { rmSync(file); } catch (err) {
       console.error(`[persistence] Failed to delete ${projectId}:`, err);
     }
   }
 }
 
-/**
- * Load all persisted projects into the in-memory store on server startup.
- * Paths are reconstructed relative to a stable synthetic root so that
- * relative() calls in routes produce the correct output.
- */
 export function loadAllProjects(): void {
   if (!existsSync(DATA_DIR)) return;
-
   const files = readdirSync(DATA_DIR).filter((f) => f.endsWith('.json'));
-
   for (const file of files) {
     try {
       const raw = readFileSync(join(DATA_DIR, file), 'utf-8');
       const data = JSON.parse(raw) as PersistedProject;
       const root = syntheticRoot(data.projectId);
       const abs = (rel: string) => join(root, rel);
-
-      // Reconstruct the DependencyGraph with absolute paths under the synthetic root
       const graph: DependencyGraph = new Map<string, GraphNode>();
       for (const node of data.nodes) {
         const absId = abs(node.id);
@@ -108,7 +83,6 @@ export function loadAllProjects(): void {
           dynamicImports: node.dynamicImports.map(abs),
         });
       }
-
       setAnalysis(data.projectId, root, graph);
       console.log(`[persistence] Restored project ${data.projectId} (${data.nodes.length} nodes)`);
     } catch (err) {

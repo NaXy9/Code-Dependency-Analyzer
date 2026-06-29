@@ -137,7 +137,7 @@ router.post('/', upload.single('archive'), async (req, res) => {
   }
 });
 
-// ── DELETE /api/analyze/:projectId ───────────────────────────────────────────
+// DELETE /api/analyze/:projectId
 router.delete('/:projectId', (req, res) => {
   const { projectId } = req.params;
 

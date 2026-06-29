@@ -18,7 +18,6 @@ import { api } from '../api/client';
 interface AppState {
   projects: Project[];
   currentProjectId: string | null;
-  /** UUID of the current project — used as React Query cache key */
   currentProjectKey: string | null;
   selectedNode: string | null;
   sidebarExpanded: boolean;
@@ -44,7 +43,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
-  // currentProjectKey === currentProjectId (UUID); used as RQ cache key
   const currentProjectKey = currentProjectId;
 
   useEffect(() => {

@@ -20,11 +20,8 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
   const queryClient = useQueryClient();
   const { addProject, updateProject } = useApp();
 
-  // Pre-generate an ID for new projects so the frontend and backend
-  // always share the same identifier from the moment of upload.
   const pendingIdRef = useRef(crypto.randomUUID());
 
-  // Reset state (and generate a fresh pending ID) each time the dialog opens
   useEffect(() => {
     if (open) {
       setFile(null);
@@ -39,11 +36,10 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const mutation = useMutation({
     mutationFn: (f: File) => {
-      // Use the existing project ID for re-analysis, or the pre-generated one for new projects
       const id = projectId ?? pendingIdRef.current;
       return api.analyze(f, id);
     },
@@ -61,7 +57,6 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
         queryClient.invalidateQueries({ queryKey: ['metrics', projectId] });
         onDone(projectId);
       } else {
-        // New project — use the pre-generated ID so it matches what the API persisted
         const id = pendingIdRef.current;
         addProject(f.name, summary, id);
         onDone(id);

@@ -2,8 +2,8 @@ import { relative, basename } from 'path';
 import type { DependencyGraph } from '@dep-analyzer/core';
 
 export interface GraphNodeDTO {
-  id: string;       // relative path — уникальный ключ, используй для edges и /api/impact
-  label: string;    // basename — то что показывать на графе
+  id: string;
+  label: string;
   externalImports: string[];
   fanIn: number;
   fanOut: number;

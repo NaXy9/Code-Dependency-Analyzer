@@ -42,7 +42,6 @@ export function ProjectDetailPage() {
 
   // Auto-open the re-upload dialog when the server has no data for this project.
   // This is a safety net for cases where the persistence file is missing
-  // (e.g. fresh deploy to a new server, manually deleted data/).
   const { error: graphError } = useGraph(currentProjectKey);
   useEffect(() => {
     if (graphError && (graphError as Error).message.includes('No analysis available')) {
