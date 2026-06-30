@@ -3,9 +3,10 @@ import type {
   GraphResponse,
   ImpactResponse,
   MetricsResponse,
+  ProjectMetadataDTO,
 } from '../types';
 
-const BASE = '/api';
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '') + '/api';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -17,11 +18,6 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  /**
-   * Upload a .zip archive for analysis.
-   * projectId must match the id stored in the frontend project list so that
-   * the in-memory store and the persistence layer use the same key.
-   */
   analyze: (file: File, projectId: string) => {
     const body = new FormData();
     body.append('archive', file);
@@ -43,9 +39,12 @@ export const api = {
       `${BASE}/impact?projectId=${encodeURIComponent(projectId)}&file=${encodeURIComponent(file)}`
     ),
 
-  /** Remove a project's analysis from the server store and disk. Best-effort. */
   deleteProject: (projectId: string) =>
     request<{ ok: boolean }>(`${BASE}/analyze/${encodeURIComponent(projectId)}`, {
       method: 'DELETE',
     }),
+
+  // Fetch metadata for every project persisted on the server.
+  projects: () =>
+    request<ProjectMetadataDTO[]>(`${BASE}/projects`),
 };

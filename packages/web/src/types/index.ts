@@ -1,6 +1,6 @@
 export interface GraphNodeDTO {
-  id: string;     // relative path — used for edges and /api/impact
-  label: string;  // basename — shown on the graph
+  id: string;
+  label: string;
   externalImports: string[];
   fanIn: number;
   fanOut: number;
@@ -22,7 +22,6 @@ export interface AnalyzeSummary {
   fileCount: number;
   edgeCount: number;
   cycleCount: number;
-  /** Primary framework detected from package.json / config files. */
   framework: string;
 }
 
@@ -39,4 +38,12 @@ export interface ImpactResponse {
 export interface MetricsResponse {
   topByFanIn: MetricEntry[];
   topByFanOut: MetricEntry[];
+}
+
+export interface ProjectMetadataDTO {
+  id: string;
+  name: string;
+  fileName: string;
+  lastAnalyzed: string;
+  summary: AnalyzeSummary;
 }

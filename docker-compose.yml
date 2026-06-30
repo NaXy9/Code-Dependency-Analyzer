@@ -1,3 +1,5 @@
+name: cda
+
 services:
   cda:
     build: .
@@ -9,9 +11,10 @@ services:
       - cda-data:/app/data
     environment:
       - NODE_ENV=production
-      - PORT=3001
-      - CORS_ORIGIN=https://yourdomain.com
-      - MAX_UPLOAD_MB=50
+      - PORT=${PORT:-3001}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
 
 volumes:
   cda-data:
+    name: cda-data

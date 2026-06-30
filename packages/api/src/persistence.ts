@@ -19,9 +19,30 @@ interface PersistedNode {
 
 interface PersistedProject {
   projectId: string;
+  name: string;
+  fileName: string;
   framework: string;
   analyzedAt: string;
+  summary: {
+    fileCount: number;
+    edgeCount: number;
+    cycleCount: number;
+    framework: string;
+  };
   nodes: PersistedNode[];
+}
+
+export interface ProjectMetadata {
+  id: string;
+  name: string;
+  fileName: string;
+  lastAnalyzed: string;
+  summary: {
+    fileCount: number;
+    edgeCount: number;
+    cycleCount: number;
+    framework: string;
+  };
 }
 
 function ensureDataDir(): void {
@@ -32,7 +53,8 @@ export function persistProject(
   projectId: string,
   projectPath: string,
   framework: string,
-  graph: DependencyGraph
+  graph: DependencyGraph,
+  meta: { name: string; fileName: string; fileCount: number; edgeCount: number; cycleCount: number }
 ): void {
   ensureDataDir();
   const rel = (abs: string) => relative(projectPath, abs);
@@ -46,7 +68,20 @@ export function persistProject(
       dynamicImports: node.dynamicImports.map(rel),
     });
   }
-  const data: PersistedProject = { projectId, framework, analyzedAt: new Date().toISOString(), nodes };
+  const data: PersistedProject = {
+    projectId,
+    name: meta.name,
+    fileName: meta.fileName,
+    framework,
+    analyzedAt: new Date().toISOString(),
+    summary: {
+      fileCount: meta.fileCount,
+      edgeCount: meta.edgeCount,
+      cycleCount: meta.cycleCount,
+      framework,
+    },
+    nodes,
+  };
   try {
     writeFileSync(join(DATA_DIR, `${projectId}.json`), JSON.stringify(data), 'utf-8');
   } catch (err) {
@@ -63,6 +98,28 @@ export function deletePersistedProject(projectId: string): void {
   }
 }
 
+export function loadAllMetadata(): ProjectMetadata[] {
+  if (!existsSync(DATA_DIR)) return [];
+  const files = readdirSync(DATA_DIR).filter((f) => f.endsWith('.json'));
+  const results: ProjectMetadata[] = [];
+  for (const file of files) {
+    try {
+      const raw = readFileSync(join(DATA_DIR, file), 'utf-8');
+      const data = JSON.parse(raw) as PersistedProject;
+      if (!data.name) continue;
+      results.push({
+        id: data.projectId,
+        name: data.name,
+        fileName: data.fileName,
+        lastAnalyzed: data.analyzedAt,
+        summary: data.summary,
+      });
+    } catch {  }
+  }
+  return results;
+}
+
+// Restore all graphs from disk into the in-memory store on server startup.
 export function loadAllProjects(): void {
   if (!existsSync(DATA_DIR)) return;
   const files = readdirSync(DATA_DIR).filter((f) => f.endsWith('.json'));

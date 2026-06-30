@@ -11,19 +11,12 @@ import { persistProject, deletePersistedProject } from '../persistence';
 
 const router: ReturnType<typeof Router> = Router();
 
-// Keep archives in memory — no temp files for the upload itself
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: Number(process.env.MAX_UPLOAD_MB ?? 50) * 1024 * 1024 },
 });
 
-/**
- * Detects the primary framework/technology of a project by reading
- * package.json dependencies and well-known config files.
- * More specific frameworks are checked before their base (e.g. Next.js before React).
- */
 function detectFramework(projectPath: string): string {
-  // Config-file shortcuts (no package.json needed)
   const configChecks: [string, string][] = [
     ['next.config.js',   'Next.js'],
     ['next.config.ts',   'Next.js'],
@@ -36,15 +29,11 @@ function detectFramework(projectPath: string): string {
     ['astro.config.mjs', 'Astro'],
     ['astro.config.ts',  'Astro'],
   ];
-
   for (const [file, name] of configChecks) {
     if (existsSync(join(projectPath, file))) return name;
   }
-
-  // package.json dependency analysis
   const pkgPath = join(projectPath, 'package.json');
   if (!existsSync(pkgPath)) return 'JS/TS';
-
   let deps: Record<string, string> = {};
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
@@ -52,11 +41,8 @@ function detectFramework(projectPath: string): string {
       devDependencies?: Record<string, string>;
     };
     deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  } catch {
-    return 'JS/TS';
-  }
+  } catch { return 'JS/TS'; }
 
-  // Order matters: more specific frameworks first
   if ('next'             in deps) return 'Next.js';
   if ('nuxt'             in deps) return 'Nuxt';
   if ('@angular/core'    in deps) return 'Angular';
@@ -72,31 +58,24 @@ function detectFramework(projectPath: string): string {
   if ('fastify'          in deps) return 'Fastify';
   if ('koa'              in deps) return 'Koa';
   if ('hono'             in deps) return 'Hono';
-
   return 'JS/TS';
 }
 
-// ── POST /api/analyze ─────────────────────────────────────────────────────────
 router.post('/', upload.single('archive'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'Field "archive" (.zip) is required' });
     return;
   }
-
   if (!req.file.originalname.toLowerCase().endsWith('.zip')) {
     res.status(400).json({ error: 'Only .zip archives are supported' });
     return;
   }
-
-  // projectId must be provided by the client so that the frontend and backend
-  // share the same identifier (used as React Query cache key and persistence key)
   const projectId = (req.body?.projectId as string | undefined)?.trim();
   if (!projectId) {
     res.status(400).json({ error: 'Field "projectId" is required' });
     return;
   }
 
-  // Clean up the previous temp extraction dir for this project (if any)
   const previous = getAnalysis(projectId);
   if (previous?.projectPath.startsWith(tmpdir())) {
     rmSync(previous.projectPath, { recursive: true, force: true });
@@ -108,7 +87,6 @@ router.post('/', upload.single('archive'), async (req, res) => {
     const zip = new AdmZip(req.file.buffer);
     zip.extractAllTo(extractPath, true);
 
-    // If zip contains a single root folder, descend into it
     const entries = readdirSync(extractPath);
     const projectPath =
       entries.length === 1 && statSync(join(extractPath, entries[0])).isDirectory()
@@ -124,10 +102,17 @@ router.post('/', upload.single('archive'), async (req, res) => {
     }
 
     const framework = detectFramework(projectPath);
+    const fileName = req.file.originalname;
+    const name = fileName.replace(/\.zip$/i, '');
 
-    // Update in-memory store and persist to disk
     setAnalysis(projectId, projectPath, graph);
-    persistProject(projectId, projectPath, framework, graph);
+    persistProject(projectId, projectPath, framework, graph, {
+      name,
+      fileName,
+      fileCount: graph.size,
+      edgeCount,
+      cycleCount: cycles.length,
+    });
 
     res.json({ fileCount: graph.size, edgeCount, cycleCount: cycles.length, framework });
   } catch (err) {
@@ -137,19 +122,14 @@ router.post('/', upload.single('archive'), async (req, res) => {
   }
 });
 
-// DELETE /api/analyze/:projectId
 router.delete('/:projectId', (req, res) => {
   const { projectId } = req.params;
-
-  // Clean up the temp dir if it's still around
   const analysis = getAnalysis(projectId);
   if (analysis?.projectPath.startsWith(tmpdir())) {
     rmSync(analysis.projectPath, { recursive: true, force: true });
   }
-
   deleteAnalysis(projectId);
   deletePersistedProject(projectId);
-
   res.json({ ok: true });
 });
 

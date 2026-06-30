@@ -7,7 +7,7 @@ import { useApp } from '../store/AppContext';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Pass when re-analysing an existing project. Omit for new uploads. */
+  // Pass when re-analysing an existing project. Omit for new uploads.
   projectId?: string;
   onDone: (projectId: string) => void;
 }
@@ -20,8 +20,11 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
   const queryClient = useQueryClient();
   const { addProject, updateProject } = useApp();
 
+  /* Pre-generate an ID for new projects so the frontend and backend
+     always share the same identifier from the moment of upload. */
   const pendingIdRef = useRef(crypto.randomUUID());
 
+  // Reset state (and generate a fresh pending ID) each time the dialog opens
   useEffect(() => {
     if (open) {
       setFile(null);
@@ -40,6 +43,7 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
 
   const mutation = useMutation({
     mutationFn: (f: File) => {
+      // Use the existing project ID for re-analysis, or the pre-generated one for new projects
       const id = projectId ?? pendingIdRef.current;
       return api.analyze(f, id);
     },
@@ -57,6 +61,7 @@ export function UploadArchiveDialog({ open, onOpenChange, projectId, onDone }: P
         queryClient.invalidateQueries({ queryKey: ['metrics', projectId] });
         onDone(projectId);
       } else {
+        // New project
         const id = pendingIdRef.current;
         addProject(f.name, summary, id);
         onDone(id);
